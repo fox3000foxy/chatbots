@@ -28,11 +28,18 @@ export class Alice {
 		for (const file of files) {
 			this.parseFile(`${aimlDir}/${file}`);
 		}
+		// Sort: more specific patterns first (fewer wildcards)
+		this.categories.sort((a, b) => {
+			const awc = (a.pattern.match(/[*_]/g) || []).length;
+			const bwc = (b.pattern.match(/[*_]/g) || []).length;
+			if (awc !== bwc) return awc - bwc;
+			return b.pattern.length - a.pattern.length;
+		});
 		this.ready = true;
 	}
 
 	private parseFile(path: string) {
-		const xml = require("fs").readFileSync(path, "utf-8");
+		const xml = require("node:fs").readFileSync(path, "utf-8");
 		const dom = new DomJS();
 		dom.parse(xml, (_err: unknown, doc: any) => {
 			this.walkCategories(doc.children || []);
@@ -75,10 +82,16 @@ export class Alice {
 		return null;
 	}
 
+	private nodeText(node: any): string {
+		if (typeof node.text === "string") return node.text;
+		if (typeof node.text === "function") return node.text() || "";
+		return this.collectText(node);
+	}
+
 	private collectText(node: any): string {
 		let text = "";
 		for (const child of node.children || []) {
-			if (child.text) text += child.text;
+			text += this.nodeText(child);
 			if (child.children) text += this.collectText(child);
 		}
 		return text;
@@ -115,19 +128,17 @@ export class Alice {
 	private patternToRegex(pattern: string): RegExp {
 		const parts = pattern.split(/\s+/);
 		const reParts = parts.map((p) => {
-			if (p === "*" || p === "_") return "(.*)";
+			if (p === "*" || p === "_") return "\\s*(.*)\\s*";
 			return p.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 		});
-		return new RegExp(`^${reParts.join("\\s+")}$`, "i");
+		return new RegExp(`^\\s*${reParts.join("\\s+")}\\s*$`, "i");
 	}
 
 	private processTemplate(tpl: any, input: string): string {
 		let result = "";
 
 		for (const child of tpl.children || []) {
-			if (child.text) {
-				result += child.text;
-			} else if (child.name === "star") {
+			if (child.name === "star") {
 				result += this.lastWildcard;
 			} else if (child.name === "sr") {
 				this.sraiDepth++;
@@ -166,6 +177,10 @@ export class Alice {
 				result += this.processCondition(child, input);
 			} else if (child.children) {
 				result += this.processTemplate(child, input);
+			} else if (typeof child.text === "string") {
+				result += child.text; // Text node content
+			} else if (typeof child.text === "function") {
+				result += child.text() || "";
 			}
 		}
 
@@ -175,7 +190,7 @@ export class Alice {
 	private getInnerText(node: any): string {
 		let text = "";
 		for (const child of node.children || []) {
-			if (child.text) text += child.text;
+			text += this.nodeText(child);
 			if (child.children) text += this.getInnerText(child);
 		}
 		return this.clean(text);

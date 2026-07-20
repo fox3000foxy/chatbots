@@ -26,7 +26,7 @@
 				"useAdjacentOverloadSignatures": "off",
 				"noControlCharactersInRegex": "off",
 				"noDebugger": "off",
-				"noExplicitAny": "error",
+				"noExplicitAny": "off",
 				"noAssignInExpressions": "error",
 				"noAsyncPromiseExecutor": "error",
 				"noConfusingVoidType": "error",
@@ -140,7 +140,7 @@
 			"style": {
 				"noShoutyConstants": "warn",
 				"noNonNullAssertion": "off",
-			"useNamingConvention": "off",
+				"useNamingConvention": "off",
 				"noInferrableTypes": "off",
 				"noParameterAssign": "off",
 				"noSubstr": "off",

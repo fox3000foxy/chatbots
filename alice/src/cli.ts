@@ -1,7 +1,10 @@
 import * as readline from "node:readline";
 import { Alice } from "./alice";
 
-const AIML_DIR = "./aiml";
+import { fileURLToPath } from "node:url";
+import { dirname, resolve } from "node:path";
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const AIML_DIR = resolve(__dirname, "../aiml");
 
 function main() {
 	const alice = new Alice();

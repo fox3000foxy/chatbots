@@ -8,12 +8,7 @@ const PARRY_DATA = "./parry/original-code";
 const MAX_TURNS = 25;
 
 // PARRY gets repetitive with keyword fallbacks; seed with a flare topic
-const SEEDS = [
-	"I WANT TO TALK ABOUT HORSES.",
-	"DO YOU KNOW ABOUT ORGANIZED CRIME?",
-	"TELL ME ABOUT YOURSELF.",
-	"WHAT ARE YOU MOST AFRAID OF?",
-];
+const SEEDS = ["I WANT TO TALK ABOUT HORSES.", "DO YOU KNOW ABOUT ORGANIZED CRIME?", "TELL ME ABOUT YOURSELF.", "WHAT ARE YOU MOST AFRAID OF?"];
 
 function main() {
 	const script = readElizaScript(DOCTOR_SCRIPT);
@@ -37,7 +32,7 @@ function main() {
 
 	for (let turn = 0; turn < MAX_TURNS; turn++) {
 		const parryResponse = parry.response(lastLine);
-		const turnNum = turn + 1;
+		const _turnNum = turn + 1;
 
 		if (parryResponse === lastParryResponse) {
 			repeatCount++;
