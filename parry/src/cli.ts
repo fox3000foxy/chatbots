@@ -1,14 +1,14 @@
 import * as readline from "node:readline";
-import Parry from "./parry";
+import { Parry } from "./parry";
+
+const DATA_DIR = process.argv[2] || ".";
 
 function main() {
-	const dataDir = process.argv[2] || ".";
-
 	const parry = new Parry();
 	try {
-		parry.loadDataFiles(dataDir);
+		parry.loadDataFiles(DATA_DIR);
 	} catch (e) {
-		console.error("Error loading PARRY data files:", e instanceof Error ? e.message : e);
+		console.error("Error loading PARRY data:", e instanceof Error ? e.message : e);
 		process.exit(1);
 	}
 
@@ -18,26 +18,21 @@ function main() {
 	console.log(`${"=".repeat(60)}\n`);
 	console.log("PARRY: WHAT DO YOU WANT?\n");
 
-	const rl = readline.createInterface({
-		input: process.stdin,
-		output: process.stdout,
-	});
+	const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
 
-	function promptUser() {
+	function prompt() {
 		rl.question("YOU: ", (input) => {
-			const trimmed = input.trim();
-			if (trimmed === "" || trimmed.toUpperCase() === "GOODBYE") {
-				console.log('\nPARRY: GOODBYE.\n');
+			const t = input.trim();
+			if (!t || t.toUpperCase() === "GOODBYE") {
+				console.log("\nPARRY: GOODBYE.\n");
 				rl.close();
 				return;
 			}
-			const response = parry.response(trimmed);
-			console.log(`PARRY: ${response}\n`);
-			promptUser();
+			console.log(`PARRY: ${parry.response(t)}\n`);
+			prompt();
 		});
 	}
-
-	promptUser();
+	prompt();
 }
 
 main();

@@ -1,8 +1,5 @@
 import { readFileSync, existsSync } from "node:fs";
 
-// ---- Types ----
-type StringList = string[];
-
 interface Emotions {
 	anger: number;
 	fear: number;
@@ -29,42 +26,14 @@ interface Inference {
 	type: "TH2" | "EMOTE" | "IF";
 	condition: string[];
 	consequences: string[];
-	guard?: string;
 }
 
 interface Pattern {
 	tokens: string[];
-	response: number; // octal or decimal semantic unit number
+	response: number;
 }
 
-interface SemanticUnit {
-	number: number;
-	type: "B" | "E";
-	anaph?: Array<[string, number]>;
-	exh?: boolean;
-	normal?: Array<[string[], Array<[string, string]>]>;
-	embd?: Array<[string[], Array<[string, string]>]>;
-	// B-type
-	contents?: string[];
-	keywds?: string[];
-	lit?: string[];
-	sqr?: string[];
-}
-
-interface Flare {
-	name: string;
-	set: string;
-	weight: number;
-	next: string;
-	words: string[];
-	type: "INSTITUTION" | "INDIVIDUAL";
-	story: number[];
-	used: boolean;
-}
-
-// ---- PARRY Engine ----
 export class Parry {
-	// Data
 	private synonyms = new Map<string, string>();
 	private simplePatterns: Pattern[] = [];
 	private compoundPatterns: Pattern[] = [];
@@ -76,158 +45,98 @@ export class Parry {
 	private startWords = new Set<string>();
 	private stopWords = new Set<string>();
 	private flags = new Set<string>();
-	private fillerPatterns: Pattern[] = [];
-	private negatePatterns: Pattern[] = [];
-	private familyPatterns: Pattern[] = [];
 
-	// Emotional state
 	private emotions: Emotions = { anger: 0, fear: 0, mistrust: 0, hurt: 0 };
 	private baselines: Emotions = { anger: 0, fear: 0, mistrust: 0, hurt: 0 };
 	private jumps: EmotionJumps = { ajump: 0, fjump: 0, hjump: 0 };
 
-	// Delusion system
 	private delFlag = false;
-	private flare: string = "INIT";
-	private flareList: string[] = [];
+	private flare = "INIT";
 	private liveFlares: string[] = [];
 	private deadFlares: string[] = [];
 	private delNouns: string[] = [];
 	private delVerbs: string[] = [];
 	private delAmbiguous: string[] = [];
-	private weak = false;
 	private delEnd = false;
 	private sensitiveList: string[] = [];
-	private suppress: string | null = null;
-	private chosen: string | null = null;
 	private topic: string | null = null;
-	private wdFlag: string | null = null;
 	private weight = 0;
+	private pdat = new Map<number, string>();
 
-	// Anaphora
-	private anaphList = new Map<string, string>();
-	private allAnaphs: string[] = [];
+	private patternRe: RegExp;
 
-	// PDAT emulation
-	private pdat = new Map<number, SemanticUnit>();
+	constructor() {
+		this.patternRe = /^\(\((.*)\)\s+(?:\x02|P)(\d+)\)$/;
+	}
 
-	// Conversation history
-	private inputHistory: string[] = [];
-	private outputHistory: string[] = [];
-
-	// Load all data files
 	loadDataFiles(dataDir: string) {
-		this.loadSynonyms(`${dataDir}/synonm.alf`);
-		this.loadIdioms(`${dataDir}/idiom.alf`);
-		this.loadIrregulars(`${dataDir}/irreg.alf`);
-		this.loadFlags(`${dataDir}/flags.alf`);
-		this.loadSuffixes(`${dataDir}/suffix.alf`);
-		this.loadBoundaryWords(`${dataDir}/startr.alf`, this.startWords);
-		this.loadBoundaryWords(`${dataDir}/stoppr.alf`, this.stopWords);
-		this.loadSimplePatterns(`${dataDir}/spats.sel`);
-		this.loadCompoundPatterns(`${dataDir}/cpats.sel`);
+		this.loadLines(`${dataDir}/synonm.alf`, (p) => {
+			const m = p.match(/^\((\S+)\s+(\S+)\)/);
+			if (m) this.synonyms.set(m[1], m[2]);
+		});
+		this.loadLines(`${dataDir}/idiom.alf`, (p) => {
+			const m = p.match(/^\((\S+)\s+(.+)\)\s*$/);
+			if (m) this.idioms.set(m[1], m[2]);
+		});
+		this.loadLines(`${dataDir}/irreg.alf`, (p) => {
+			const m = p.match(/^\((\S+)\s+(.+)\)\s*$/);
+			if (m) this.irregulars.set(m[1], m[2]);
+		});
+		this.loadLines(`${dataDir}/flags.alf`, (p) => {
+			const m = p.match(/^\((\S+)\)/);
+			if (m) this.flags.add(m[1]);
+		});
+		this.loadLines(`${dataDir}/suffix.alf`, (p) => {
+			const t = p.trim();
+			if (t && !t.startsWith(";")) this.suffixes.push(t);
+		});
+		this.loadLines(`${dataDir}/startr.alf`, (p) => {
+			const t = p.trim().toUpperCase();
+			if (t && !t.startsWith(";") && !t.startsWith("(")) this.startWords.add(t);
+		});
+		this.loadLines(`${dataDir}/stoppr.alf`, (p) => {
+			const t = p.trim().toUpperCase();
+			if (t && !t.startsWith(";") && !t.startsWith("(")) this.stopWords.add(t);
+		});
+
+		this.loadPatterns(`${dataDir}/spats.sel`, this.simplePatterns);
+		this.loadPatterns(`${dataDir}/cpats.sel`, this.compoundPatterns);
 		this.loadBeliefs(`${dataDir}/bel`);
 		this.loadInferences(`${dataDir}/inf`);
-		this.loadPatternFile(`${dataDir}/filler.pat`, this.fillerPatterns);
-		this.loadPatternFile(`${dataDir}/negate.pat`, this.negatePatterns);
-		this.loadPatternFile(`${dataDir}/famly.pat`, this.familyPatterns);
 
 		this.initEmotions();
 		this.initFlares();
 	}
 
-	private loadSynonyms(path: string) {
-		for (const line of this.readLines(path)) {
-			const m = line.match(/^\((\S+)\s+(\S+)\)/);
-			if (m) this.synonyms.set(m[1], m[2]);
+	private loadLines(path: string, fn: (line: string) => void) {
+		if (!existsSync(path)) return;
+		for (const line of readFileSync(path, "utf-8").split("\n")) {
+			const t = line.trim();
+			if (t) fn(t);
 		}
 	}
 
-	private loadIdioms(path: string) {
-		for (const line of this.readLines(path)) {
-			const m = line.match(/^\((\S+)\s+(.+)\)\s*$/);
-			if (m) this.idioms.set(m[1], m[2]);
-		}
-	}
-
-	private loadIrregulars(path: string) {
-		for (const line of this.readLines(path)) {
-			const m = line.match(/^\((\S+)\s+(.+)\)\s*$/);
-			if (m) this.irregulars.set(m[1], m[2]);
-		}
-	}
-
-	private loadFlags(path: string) {
-		for (const line of this.readLines(path)) {
-			const m = line.match(/^\((\S+)\)/);
-			if (m) this.flags.add(m[1]);
-		}
-	}
-
-	private loadSuffixes(path: string) {
-		for (const line of this.readLines(path)) {
-			const trimmed = line.trim();
-			if (trimmed && !trimmed.startsWith(";")) {
-				this.suffixes.push(trimmed);
-			}
-		}
-	}
-
-	private loadBoundaryWords(path: string, set: Set<string>) {
-		for (const line of this.readLines(path)) {
-			const trimmed = line.trim().toUpperCase();
-			if (trimmed && !trimmed.startsWith(";") && !trimmed.startsWith("(")) {
-				set.add(trimmed);
-			}
-		}
-	}
-
-	private loadSimplePatterns(path: string) {
-		for (const line of this.readLines(path)) {
-			const trimmed = line.trim();
-			if (!trimmed || trimmed.startsWith(";")) continue;
-			// Format: ((TOKEN1 TOKEN2 ...) NNNN) or ((TOKEN1 ...) PNNNN)
-			const m = trimmed.match(/^\(\((.*)\)\s+(?:|P)(\d+)\)/);
+	private loadPatterns(path: string, target: Pattern[]) {
+		if (!existsSync(path)) return;
+		for (const line of readFileSync(path, "utf-8").split("\n")) {
+			const t = line.trim();
+			if (!t || t.startsWith(";") || t.startsWith("~")) continue;
+			const m = t.match(this.patternRe);
 			if (m) {
-				const tokens = m[1].trim().split(/\s+/);
-				const num = Number.parseInt(m[2], 10);
-				this.simplePatterns.push({ tokens, response: num });
-			}
-		}
-	}
-
-	private loadCompoundPatterns(path: string) {
-		for (const line of this.readLines(path)) {
-			const trimmed = line.trim();
-			if (!trimmed || trimmed.startsWith(";")) continue;
-			// Same format as simple patterns
-			const m = trimmed.match(/^\(\((.*)\)\s+(?:|P)(\d+)\)/);
-			if (m) {
-				const tokens = m[1].trim().split(/\s+/);
-				const num = Number.parseInt(m[2], 10);
-				this.compoundPatterns.push({ tokens, response: num });
-			}
-		}
-	}
-
-	private loadPatternFile(path: string, target: Pattern[]) {
-		for (const line of this.readLines(path)) {
-			const trimmed = line.trim();
-			if (!trimmed || trimmed.startsWith(";") || trimmed.startsWith("~")) continue;
-			const m = trimmed.match(/^\(\((.*)\)\s+(?:|P)(\d+)\)/);
-			if (m) {
-				const tokens = m[1].trim().split(/\s+/);
-				const num = Number.parseInt(m[2], 10);
-				target.push({ tokens, response: num });
+				target.push({
+					tokens: m[1].trim().split(/\s+/),
+					response: Number.parseInt(m[2], 10),
+				});
 			}
 		}
 	}
 
 	private loadBeliefs(path: string) {
-		for (const line of this.readLines(path)) {
-			const trimmed = line.trim();
-			if (!trimmed || trimmed.startsWith("~") || trimmed.startsWith(";")) continue;
-			// Format: (NAME STRENGTH CATEGORY ...) or (*NAME STRENGTH CATEGORY ...)
-			const m = trimmed.match(/^\((\*?)(\S+)\s+(\d+)\s+(\S+)/);
+		if (!existsSync(path)) return;
+		for (const line of readFileSync(path, "utf-8").split("\n")) {
+			const t = line.trim();
+			if (!t || t.startsWith("~") || t.startsWith(";")) continue;
+			const m = t.match(/^\((\*?)(\S+)\s+(\d+)\s+(\S+)/);
 			if (m) {
 				this.beliefs.push({
 					name: m[2],
@@ -240,56 +149,59 @@ export class Parry {
 	}
 
 	private loadInferences(path: string) {
-		for (const line of this.readLines(path)) {
-			const trimmed = line.trim();
-			if (!trimmed || trimmed.startsWith("~") || trimmed.startsWith(";")) continue;
-			if (trimmed.startsWith("(TH2")) {
-				const rest = trimmed.slice(4, -1).trim();
-				const parts = this.parseInferenceArgs(rest);
+		if (!existsSync(path)) return;
+		for (const line of readFileSync(path, "utf-8").split("\n")) {
+			const t = line.trim();
+			if (!t || t.startsWith("~") || t.startsWith(";")) continue;
+			if (t.startsWith("(TH2")) {
+				const rest = t.slice(4, -1).trim();
+				const parts = this.parseArgs(rest);
 				if (parts.length >= 2) {
-					this.inferences.push({
-						type: "TH2",
-						condition: [parts[0]],
-						consequences: parts.slice(1),
-					});
+					this.inferences.push({ type: "TH2", condition: [parts[0]], consequences: parts.slice(1) });
 				}
-			} else if (trimmed.startsWith("(EMOTE")) {
-				const rest = trimmed.slice(6, -1).trim();
+			} else if (t.startsWith("(EMOTE")) {
+				const rest = t.slice(6, -1).trim();
 				const m = rest.match(/^\((\w+\s+-?[\d.]+)\)\s+(.+)/);
 				if (m) {
-					const jumpParts = m[1].split(/\s+/);
-					const consequences = m[2].trim().split(/\s+/);
 					this.inferences.push({
 						type: "EMOTE",
-						condition: jumpParts,
-						consequences,
+						condition: m[1].split(/\s+/),
+						consequences: m[2].trim().split(/\s+/),
 					});
 				}
-			} else if (trimmed.startsWith("(IF")) {
-				const rest = trimmed.slice(2, -1).trim();
-				const parts = this.parseInferenceArgs(rest);
+			} else if (t.startsWith("(IF")) {
+				const rest = t.slice(2, -1).trim();
+				const parts = this.parseArgs(rest);
 				if (parts.length >= 3) {
-					this.inferences.push({
-						type: "IF",
-						condition: [parts[0], parts[1]],
-						consequences: parts.slice(2),
-					});
+					this.inferences.push({ type: "IF", condition: [parts[0], parts[1]], consequences: parts.slice(2) });
 				}
 			}
 		}
 	}
 
-	private parseInferenceArgs(s: string): string[] {
+	private parseArgs(s: string): string[] {
 		const result: string[] = [];
 		let depth = 0;
-		let current = "";
+		let cur = "";
 		for (const ch of s) {
-			if (ch === "(") { depth++; if (depth > 1) current += ch; }
-			else if (ch === ")") { depth--; if (depth > 0) current += ch; else if (depth === 0 && current) { result.push(current.trim()); current = ""; } }
-			else if (ch === " " && depth === 0) { if (current) { result.push(current.trim()); current = ""; } }
-			else current += ch;
+			if (ch === "(") {
+				depth++;
+				if (depth > 1) cur += ch;
+			} else if (ch === ")") {
+				depth--;
+				if (depth > 0) cur += ch;
+				else if (depth === 0 && cur) {
+					result.push(cur.trim());
+					cur = "";
+				}
+			} else if (ch === " " && depth === 0) {
+				if (cur) {
+					result.push(cur.trim());
+					cur = "";
+				}
+			} else cur += ch;
 		}
-		if (current) result.push(current.trim());
+		if (cur) result.push(cur.trim());
 		return result;
 	}
 
@@ -301,91 +213,75 @@ export class Parry {
 
 	private initFlares() {
 		this.flare = "INIT";
-		this.liveFlares = ["HORSESET", "RACESET", "GAMBLESET", "BOOKIESET", "GANGSTSET", "MAFIASET"];
+		this.liveFlares = ["HORSESET", "HORSERACINGSET", "MONEYSET", "GAMBLERSET", "BOOKIESET", "CHEATSET", "GANGSTERSET", "RACKETSET", "MAFIASET", "PERSONSET", "ITALIANSET", "POLICESET"];
 		this.deadFlares = [];
 		this.delFlag = false;
 		this.delEnd = false;
+		this.delNouns = ["MAFIA", "GUN", "DEATH", "CHIEF"];
+		this.delVerbs = ["KILL", "SPY"];
+		this.delAmbiguous = ["BEAT", "HATE"];
+		this.sensitiveList = ["LOOKS", "SEXLIFE", "FAMILY", "EDUCATION", "RELIGION"];
 	}
 
-	// ---- Core Functions ----
-
-	// Synonym reduction to canonical 5-letter form
 	private wordCanonical(word: string): string {
 		const upper = word.toUpperCase();
-		const fromSyn = this.synonyms.get(upper);
-		if (fromSyn) return fromSyn;
-		const fromIdiom = this.idioms.get(upper);
-		if (fromIdiom) return fromIdiom;
-		const fromIrreg = this.irregulars.get(upper);
-		if (fromIrreg) return fromIrreg;
-		// Try stripping suffixes
-		for (const sfx of this.suffixes) {
-			if (upper.endsWith(sfx)) {
-				const base = upper.slice(0, -sfx.length);
-				const fromBase = this.synonyms.get(base);
-				if (fromBase) return fromBase;
-			}
-		}
-		return upper;
+		return this.synonyms.get(upper) ?? this.idioms.get(upper) ?? this.irregulars.get(upper) ?? upper;
 	}
 
-	// Split input into canonical tokens
 	private canonicalTokenize(input: string): string[] {
-		let text = input.toUpperCase();
-		// Remove punctuation except periods and question marks (sentence boundaries)
-		text = text.replace(/[^A-Z0-9\s'.?-]/g, " ").replace(/\s+/g, " ").trim();
-		const rawWords = text.split(/\s+/).filter((w) => w.length > 0);
-		// Split on sentence boundaries
-		const tokens: string[] = [];
-		for (const word of rawWords) {
-			// Handle contractions via irregulars
-			const canon = this.wordCanonical(word);
-			// Truncate to 5 characters (PARRY convention)
-			tokens.push(canon.length > 5 ? canon.slice(0, 5) : canon);
-		}
-		return tokens;
+		const text = input
+			.toUpperCase()
+			.replace(/[^A-Z0-9\s]/g, " ")
+			.replace(/\s+/g, " ")
+			.trim();
+		return text
+			.split(/\s+/)
+			.filter(Boolean)
+			.map((w) => {
+				const c = this.wordCanonical(w);
+				return c.length > 5 ? c.slice(0, 5) : c;
+			});
 	}
 
-	// Match tokens against pattern list; return first match
-	private matchPatterns(tokens: string[], patterns: Pattern[]): number | null {
-		for (const pat of patterns) {
-			if (this.tokensMatch(tokens, pat.tokens)) {
-				return pat.response;
-			}
-		}
-		return null;
-	}
-
-	private tokensMatch(input: string[], pattern: string[]): boolean {
+	private matchTokens(input: string[], pattern: string[]): boolean {
 		if (pattern.length === 0) return true;
 		if (pattern.length > input.length) return false;
-		// Simple prefix match for now (PARRY uses this)
-		for (let i = 0; i < pattern.length; i++) {
-			if (pattern[i] !== input[i]) return false;
+		for (let start = 0; start <= input.length - pattern.length; start++) {
+			let ok = true;
+			for (let i = 0; i < pattern.length; i++) {
+				if (pattern[i] !== input[start + i]) {
+					ok = false;
+					break;
+				}
+			}
+			if (ok) return true;
 		}
-		return true;
+		return false;
 	}
 
-	// Check if any member of list appears in tokens
-	private memberAny(list: string[], tokens: string[]): string | null {
-		for (const item of list) {
-			for (const tok of tokens) {
-				if (tok === item) return item;
-			}
+	private matchPatterns(tokens: string[], patterns: Pattern[]): number | null {
+		for (const pat of patterns) {
+			if (this.matchTokens(tokens, pat.tokens)) return pat.response;
 		}
 		return null;
 	}
 
-	// ---- Emotional Model (from opar3 MODIFVAR) ----
+	private memberAny(list: string[], tokens: string[]): string | null {
+		for (const item of list) {
+			if (tokens.includes(item)) return item;
+		}
+		return null;
+	}
+
 	private modifyVariables() {
 		this.emotions.anger = Math.max(this.emotions.anger - 1, this.baselines.anger);
 		this.emotions.hurt = Math.max(this.emotions.hurt - 0.5, this.baselines.hurt);
 		if (this.delFlag) {
 			this.emotions.fear = Math.max(this.emotions.fear - 0.1, this.baselines.fear + 5);
-		} else if (this.flare !== "INIT") {
-			this.emotions.fear = Math.max(this.emotions.fear - 0.2, this.baselines.fear + 3);
-		} else {
+		} else if (this.flare === "INIT") {
 			this.emotions.fear = Math.max(this.emotions.fear - 0.3, this.baselines.fear);
+		} else {
+			this.emotions.fear = Math.max(this.emotions.fear - 0.2, this.baselines.fear + 3);
 		}
 		this.emotions.mistrust = Math.max(this.emotions.mistrust - 0.05, this.baselines.mistrust);
 		this.jumps = { ajump: 0, fjump: 0, hjump: 0 };
@@ -398,43 +294,28 @@ export class Parry {
 		this.emotions.mistrust += this.jumps.hjump * 0.5;
 	}
 
-	// ---- Belief System ----
-	private getBelief(name: string): Belief | undefined {
-		return this.beliefs.find((b) => b.name === name);
-	}
-
-	private setBeliefStrength(name: string, newStrength: number) {
-		const b = this.getBelief(name);
-		if (b) b.strength = newStrength;
-	}
-
 	private applyInferences() {
 		for (const inf of this.inferences) {
 			if (inf.type === "TH2") {
-				// TH2: condition belief strength decays by 2 each turn
-				const cond = inf.condition[0];
-				const bel = this.getBelief(cond);
+				const bel = this.beliefs.find((b) => b.name === inf.condition[0]);
 				if (bel && bel.strength > 0) {
 					bel.strength = Math.max(0, bel.strength - 2);
-					// Consequences are triggered when strength > 0
 					for (const cons of inf.consequences) {
-						const consBel = this.getBelief(cons);
-						if (consBel) consBel.strength = Math.min(5, consBel.strength + 1);
+						const cb = this.beliefs.find((b) => b.name === cons);
+						if (cb) cb.strength = Math.min(5, cb.strength + 1);
 					}
 				}
 			} else if (inf.type === "EMOTE") {
-				// EMOTE: emotional jumps based on beliefs
-				const jumpType = inf.condition[0];
-				const jumpAmount = Number.parseFloat(inf.condition[1]);
-				const triggerBeliefs = inf.consequences;
-				for (const belName of triggerBeliefs) {
-					const bel = this.getBelief(belName);
+				const jt = inf.condition[0];
+				const ja = Number.parseFloat(inf.condition[1]);
+				for (const bn of inf.consequences) {
+					const bel = this.beliefs.find((b) => b.name === bn);
 					if (bel && bel.strength > 0) {
-						if (jumpType === "AJUMP") this.jumps.ajump += jumpAmount;
-						else if (jumpType === "FJUMP") this.jumps.fjump += jumpAmount;
-						else if (jumpType === "HJUMP") {
-							this.jumps.hjump += jumpAmount;
-							this.jumps.ajump += jumpAmount * 0.5;
+						if (jt === "AJUMP") this.jumps.ajump += ja;
+						else if (jt === "FJUMP") this.jumps.fjump += ja;
+						else if (jt === "HJUMP") {
+							this.jumps.hjump += ja;
+							this.jumps.ajump += ja * 0.5;
 						}
 					}
 				}
@@ -442,176 +323,102 @@ export class Parry {
 		}
 	}
 
-	// ---- Flare/Delusion System ----
 	private checkFlare(inp: string[]): boolean {
-		let nFlare = "INIT";
+		let nf = "INIT";
 		let result = false;
 		let wt = 0;
-		let w: string | null = null;
-
 		for (const word of inp) {
-			const fset = this.getFlareSet(word);
-			if (fset && (this.liveFlares.includes(fset) || this.deadFlares.includes(fset))) {
-				const fwt = this.getFlareWeight(fset);
-				const nwt = this.getFlareWeight(this.getFlareSet(nFlare) || "");
-				if (fwt > nwt) {
-					nFlare = word;
+			const fs = this.getFlareSet(word);
+			if (fs && (this.liveFlares.includes(fs) || this.deadFlares.includes(fs))) {
+				const fwt = this.getFlareWeight(fs);
+				if (fwt > wt) {
+					nf = word;
 					result = true;
-					w = word;
 					wt = fwt;
 				}
 			}
 		}
 		if (result) {
 			if (this.flare === "INIT" || wt > 1) {
-				this.flare = nFlare;
+				this.flare = nf;
 				this.weight = wt;
-			} else {
-				result = false;
+				return true;
 			}
+			return false;
 		}
-		return result;
+		return false;
 	}
 
 	private getFlareSet(word: string): string | null {
-		const flareMap: Record<string, string> = {
-			"HORSE": "HORSESET",
-			"RACE": "RACESET",
-			"GAMBL": "GAMBLESET",
-			"BOOKI": "BOOKIESET",
-			"GANGS": "GANGSTSET",
-			"MAFIA": "MAFIASET",
+		const map: Record<string, string> = {
+			HORSE: "HORSESET",
+			RACES: "HORSERACINGSET",
+			RACE: "HORSERACINGSET",
+			MONEY: "MONEYSET",
+			GAMBL: "GAMBLERSET",
+			BET: "GAMBLERSET",
+			BOOKI: "BOOKIESET",
+			CROOK: "BOOKIESET",
+			CHEAT: "CHEATSET",
+			GANGSTER: "GANGSTERSET",
+			HOOD: "GANGSTERSET",
+			RACKET: "RACKETSET",
+			MAFIA: "MAFIASET",
+			ITALI: "ITALIANSET",
+			ITALY: "ITALIANSET",
+			POLICE: "POLICESET",
+			FUZZ: "POLICESET",
 		};
-		return flareMap[word] || null;
+		for (const [key, val] of Object.entries(map)) {
+			if (word.startsWith(key)) return val;
+		}
+		return null;
 	}
 
 	private getFlareWeight(fset: string): number {
-		const weights: Record<string, number> = {
-			"HORSESET": 1,
-			"RACESET": 2,
-			"GAMBLESET": 3,
-			"BOOKIESET": 4,
-			"GANGSTSET": 5,
-			"MAFIASET": 6,
+		const w: Record<string, number> = {
+			HORSESET: 1,
+			HORSERACINGSET: 2,
+			MONEYSET: 3,
+			GAMBLERSET: 4,
+			BOOKIESET: 5,
+			CHEATSET: 6,
+			GANGSTERSET: 7,
+			RACKETSET: 8,
+			MAFIASET: 9,
+			PERSONSET: 6,
+			ITALIANSET: 5,
+			POLICESET: 4,
 		};
-		return weights[fset] || 0;
-	}
-
-	private flareRecord(fset: string) {
-		this.flareMod(fset);
-		this.jumps.fjump = this.weight / 40.0;
-		this.topic = fset;
+		return w[fset] || 0;
 	}
 
 	private flareMod(fset: string) {
 		this.liveFlares = this.liveFlares.filter((f) => f !== fset);
 		if (!this.deadFlares.includes(fset)) this.deadFlares.push(fset);
-		this.fixPointers(fset);
 	}
 
-	private fixPointers(flset: string) {
-		const nextFlare = this.getNextFlare(flset);
-		if (nextFlare) {
-			for (const f of [...this.liveFlares, ...this.deadFlares]) {
-				if (this.getNextFlare(f) === flset) {
-					this.setNextFlare(f, nextFlare);
-				}
-			}
-		}
+	private flareRecord(fset: string) {
+		this.flareMod(fset);
+		this.jumps.fjump = this.weight / 40;
+		this.topic = fset;
 	}
 
-	private getNextFlare(fset: string): string | null {
-		const chain: Record<string, string> = {
-			"HORSESET": "RACESET",
-			"RACESET": "GAMBLESET",
-			"GAMBLESET": "BOOKIESET",
-			"BOOKIESET": "GANGSTSET",
-			"GANGSTSET": "MAFIASET",
-		};
-		return chain[fset] || null;
+	private delCheck(inp: string[]): boolean {
+		if (this.memberAny(this.delNouns, inp)) return true;
+		if (this.memberAny(this.delVerbs, inp)) return true;
+		if (this.emotions.mistrust > 10 && this.memberAny(this.delAmbiguous, inp)) return true;
+		return false;
 	}
 
-	private setNextFlare(fset: string, next: string) {
-		// In the original, this modifies the property list
-		// Simplified: we track this through flareMod
+	private express(num: number): string | null {
+		const fromPdat = this.pdat.get(num);
+		if (fromPdat) return fromPdat;
+		return this.synthetic(num);
 	}
 
-	// ---- Response Selection ----
-	response(input: string): string {
-		const tokens = this.canonicalTokenize(input);
-		this.inputHistory.push(input);
-
-		// 1. Apply emotional decay
-		this.modifyVariables();
-
-		// 2. Apply belief-based inferences
-		this.applyInferences();
-
-		// 3. Apply emotional jumps from inferences
-		this.applyEmotionalJumps();
-
-		// 4. Try to match patterns
-		const unitNum = this.matchPatterns(tokens, this.simplePatterns)
-			?? this.matchPatterns(tokens, this.compoundPatterns);
-
-		if (unitNum !== null) {
-			const response = this.express(unitNum);
-			if (response) return this.finalizeResponse(response);
-		}
-
-		// 5. Fallback cascade
-		const specRef = this.specFn(tokens);
-		if (specRef) { const r = this.express(specRef); if (r) return this.finalizeResponse(r); }
-
-		const flareRef = this.flareRef(tokens);
-		if (flareRef) { const r = this.expressUnitFromSet(flareRef); if (r) return this.finalizeResponse(r); }
-
-		const delRef = this.delRef(tokens);
-		if (delRef) { const r = this.express(delRef); if (r) return this.finalizeResponse(r); }
-
-		const miscQ = this.miscQ(tokens);
-		if (miscQ) { const r = this.express(miscQ); if (r) return this.finalizeResponse(r); }
-
-		const miscS = this.miscS(tokens);
-		if (miscS) { const r = this.express(miscS); if (r) return this.finalizeResponse(r); }
-
-		// Check for delusion keywords at high mistrust
-		if (this.emotions.mistrust > 10) {
-			const delKey = this.memberAny(this.delAmbiguous, tokens);
-			if (delKey) { const r = this.express(3000); if (r) return this.finalizeResponse(r); }
-		}
-
-		// Last resort: keyword scan
-		const keyRef = this.keywordRef(tokens);
-		if (keyRef) { const r = this.express(keyRef); if (r) return this.finalizeResponse(r); }
-
-		// Ultimate fallback
-		return this.finalizeResponse("I SEE, PLEASE GO ON.");
-	}
-
-	private finalizeResponse(response: string): string {
-		this.outputHistory.push(response);
-		// Check if PARRY's response mentions flares or delusions
-		this.ascan(response);
-		return response;
-	}
-
-	// Express a semantic unit number as English text
-	private express(unitNum: number): string | null {
-		// Try PDAT lookup; fall back to synthetic response
-		const unit = this.pdat.get(unitNum);
-		if (unit && unit.type === "E" && unit.normal && unit.normal.length > 0) {
-			const [sentence, anaphs] = unit.normal[0];
-			for (const [ref, meaning] of anaphs) {
-				this.anaphList.set(ref, meaning);
-			}
-			return sentence.join(" ");
-		}
-		return this.syntheticResponse(unitNum);
-	}
-
-	private syntheticResponse(unitNum: number): string {
-		const responses: Record<number, string> = {
+	private synthetic(n: number): string {
+		const r: Record<number, string> = {
 			10: "HELLO. WHAT DO YOU WANT?",
 			16: "PLEASE GO ON.",
 			17: "WHAT MAKES YOU FEEL THAT WAY?",
@@ -634,137 +441,105 @@ export class Parry {
 			3000: "WHAT DO YOU MEAN BY THAT?",
 			4924: "I DON'T KNOW WHAT YOU'RE TALKING ABOUT.",
 		};
-		return responses[unitNum] ?? "I DON'T KNOW WHAT YOU MEAN.";
+		return r[n] ?? "I DON'T KNOW WHAT YOU MEAN.";
 	}
 
-	private expressUnitFromSet(setName: string): string | null {
-		const flareResponses: Record<string, string> = {
-			"HORSESET": "I USED TO GO TO THE RACES SOMETIMES. IT WAS FUN.",
-			"RACESET": "I KNOW SOME PEOPLE WHO GO TO THE TRACK. THEY LOSE A LOT OF MONEY.",
-			"GAMBLESET": "I'VE DONE SOME GAMBLING MYSELF. IT'S DANGEROUS.",
-			"BOOKIESET": "BOOKIES ARE CROOKED, YOU KNOW. THEY WORK FOR THE MAFIA.",
-			"GANGSTSET": "I THINK THE MAFIA IS BEHIND A LOT OF THINGS. IT'S NOT SAFE.",
-			"MAFIASET": "THE MAFIA IS OUT TO GET ME, I'M SURE OF IT. THEY'VE BEEN FOLLOWING ME.",
+	private expressFlare(setName: string): string {
+		const r: Record<string, string> = {
+			HORSESET: "I USED TO GO TO THE RACES SOMETIMES.",
+			HORSERACINGSET: "I KNOW PEOPLE WHO GO TO THE TRACK. THEY LOSE MONEY.",
+			MONEYSET: "MONEY IS TIGHT. I DON'T HAVE MUCH.",
+			GAMBLERSET: "I'VE DONE SOME GAMBLING. IT'S DANGEROUS.",
+			BOOKIESET: "BOOKIES ARE CROOKED. THEY WORK FOR THE MAFIA.",
+			CHEATSET: "PEOPLE ARE ALWAYS TRYING TO CHEAT ME.",
+			GANGSTERSET: "THE GANGSTERS ARE INVOLVED IN EVERYTHING.",
+			RACKETSET: "THE RACKETS ARE RUN BY ORGANIZED CRIME.",
+			MAFIASET: "THE MAFIA IS OUT TO GET ME. THEY'VE BEEN FOLLOWING ME.",
+			PERSONSET: "I KNOW SOME PEOPLE IN THE ORGANIZATION.",
+			ITALIANSET: "THE ITALIANS RUN THINGS AROUND HERE.",
+			POLICESET: "THE POLICE DON'T DO ANYTHING ABOUT REAL CRIME.",
 		};
-		return flareResponses[setName] || "I DON'T KNOW WHAT YOU MEAN.";
+		return r[setName] ?? "I DON'T KNOW WHAT YOU MEAN.";
 	}
 
-	// ---- Fallback Cascade ----
-	private specFn(tokens: string[]): number | null {
-		// Check for special functions: GO_ON, ELAB, WHO, WHAT
-		if (tokens.includes("GO") || tokens.includes("CONTINUE")) return 16;
-		if (tokens.includes("ELAB")) return 24;
-		return null;
-	}
+	response(input: string): string {
+		const tokens = this.canonicalTokenize(input);
 
-	private flareRef(tokens: string[]): string | null {
-		// Check for new flare and record
+		this.modifyVariables();
+		this.applyInferences();
+		this.applyEmotionalJumps();
+
+		const patNum = this.matchPatterns(tokens, this.simplePatterns) ?? this.matchPatterns(tokens, this.compoundPatterns);
+
+		if (patNum !== null) {
+			const r = this.express(patNum);
+			if (r) return this.finalizeResponse(r);
+		}
+
+		// SPECFN
+		if (tokens.includes("GO") || tokens.includes("CONTINUE")) return this.finalizeResponse(this.express(16) ?? "");
+		if (tokens.includes("ELAB")) return this.finalizeResponse(this.express(24) ?? "");
+
+		// FLAREREF
 		if (this.checkFlare(tokens)) {
-			this.flareRecord(this.getFlareSet(this.flare) || "");
-		}
-		// Check for old flare
-		const oldCheck = this.checkFlareIn(tokens, this.deadFlares);
-		if (oldCheck) {
-			return this.getFlareSet(oldCheck);
-		}
-		return null;
-	}
-
-	private checkFlareIn(tokens: string[], flareList: string[]): string | null {
-		for (const word of tokens) {
-			const fset = this.getFlareSet(word);
-			if (fset && flareList.includes(fset)) return word;
-		}
-		return null;
-	}
-
-	private delRef(tokens: string[]): number | null {
-		const found = this.delCheck(tokens);
-		if (found) {
-			if (!this.delFlag) {
-				this.jumps.fjump = 0.5;
-				this.flareMod("MAFIASET");
-			} else {
-				this.jumps.fjump = 0.4;
+			const fs = this.getFlareSet(this.flare);
+			if (fs) {
+				this.flareRecord(fs);
+				return this.finalizeResponse(this.expressFlare(fs));
 			}
+		}
+
+		// DELREF
+		if (this.delCheck(tokens)) {
+			if (this.delFlag) this.jumps.fjump = 0.4;
+			else this.jumps.fjump = 0.5;
 			this.delFlag = true;
 			this.flare = "INIT";
 			this.topic = "DELUSIONS";
-			// Return a delusion-related response
-			return 1020;
+			const r = this.express(1020);
+			if (r) return this.finalizeResponse(r);
 		}
-		return null;
-	}
 
-	private delCheck(inp: string[]): boolean {
-		// Check for strong delusion nouns and verbs
-		if (this.memberAny(this.delNouns, inp)) return true;
-		if (this.memberAny(this.delVerbs, inp)) return true;
-		// Check for ambiguous delusion words at high mistrust
-		if (this.emotions.mistrust > 10 && this.memberAny(this.delAmbiguous, inp)) return true;
-		return false;
-	}
+		// MISCQ
+		if (tokens[0] === "WHY" || tokens[0] === "HOW") {
+			const r = this.express(200);
+			if (r) return this.finalizeResponse(r);
+		}
 
-	private miscQ(tokens: string[]): number | null {
-		// Check for recognizable question types
-		if (tokens[0] === "WHY" || tokens[0] === "HOW") return 200;
-		return null;
-	}
+		// MISCS
+		if (tokens.includes("HELLO") || tokens.includes("HI")) {
+			const r = this.express(10);
+			if (r) return this.finalizeResponse(r);
+		}
 
-	private miscS(tokens: string[]): number | null {
-		// Check for recognizable statements
-		if (tokens.includes("HELLO") || tokens.includes("HI")) return 10;
-		return null;
-	}
-
-	private keywordRef(tokens: string[]): number | null {
-		// Scan for ANY keyword as last resort
-		const keywords = ["YOU", "I", "DOCTOR", "HOSPITAL", "FEEL", "THINK", "WANT", "KNOW"];
+		// KEYWORD fallback
+		const keywords = ["YOU", "I", "DOCTOR", "HOSPITAL", "FEEL", "THINK", "WANT"];
 		for (const kw of keywords) {
 			if (tokens.includes(kw)) {
-				switch (kw) {
-					case "I": return 600;
-					case "YOU": return 630;
-					case "DOCTOR": return 150;
-					case "HOSPITAL": return 70;
-					case "FEEL": return 21;
-					case "THINK": return 600;
-					case "WANT": return 1020;
-				}
-				return 4924;
+				const map: Record<string, number> = { I: 600, YOU: 630, DOCTOR: 150, HOSPITAL: 70, FEEL: 21, THINK: 600, WANT: 1020 };
+				const r = this.express(map[kw] ?? 4924);
+				if (r) return this.finalizeResponse(r);
 			}
 		}
-		return null;
+
+		return this.finalizeResponse("I SEE, PLEASE GO ON.");
 	}
 
-	// Scan PARRY's own answer for flare or mafia mentions
-	private ascan(ans: string) {
-		const tokens = this.canonicalTokenize(ans);
+	private finalizeResponse(resp: string): string {
+		const tokens = this.canonicalTokenize(resp);
 		for (const word of tokens) {
-			const fset = this.getFlareSet(word);
-			if (fset && this.liveFlares.includes(fset)) {
-				this.flareMod(fset);
-			}
+			const fs = this.getFlareSet(word);
+			if (fs && this.liveFlares.includes(fs)) this.flareMod(fs);
 		}
 		if (tokens.includes("MAFIA")) {
 			this.delFlag = true;
 			this.flare = "INIT";
 			this.topic = "DELUSIONS";
 		}
-		if (this.delFlag) {
-			this.delCheck(tokens);
-		}
+		return resp;
 	}
 
-	// For initial setup / loading PDAT
-	addSemanticUnit(unit: SemanticUnit) {
-		this.pdat.set(unit.number, unit);
-	}
-
-	private readLines(path: string): string[] {
-		if (!existsSync(path)) return [];
-		return readFileSync(path, "utf-8").split("\n").filter((l) => l.trim().length > 0);
+	addResponse(num: number, text: string) {
+		this.pdat.set(num, text);
 	}
 }
-
-export default Parry;
