@@ -1,0 +1,26 @@
+{
+  "name": "eliza-ts",
+  "version": "1.0.0",
+  "description": "Faithful TypeScript port of Weizenbaum's 1966 ELIZA, based on the rediscovered MAD-SLIP source code via anthay/ELIZA",
+  "type": "module",
+  "scripts": {
+    "start": "tsx src/cli.ts",
+    "build": "tsc",
+    "default": "tsx src/cli.ts --script scripts/default.txt",
+    "doctor": "tsx src/cli.ts --script scripts/ELIZA-script-DOCTOR-original-1966-CACM-appendix.txt",
+    "yapyap": "tsx src/cli.ts --script scripts/ELIZA-script-YAPYAP-original.txt",
+    "yapyap-cacm": "tsx src/cli.ts --script scripts/ELIZA-script-YAPYAP-modified-for-1966-CACM-ELIZA.txt",
+    "french": "tsx src/cli.ts --script scripts/ELIZA-script-DOCTOR-French-Jeu-de-Paume.txt",
+    "all": "npm run doctor && npm run yapyap && npm run yapyap-cacm",
+    "format": "bunx --bun @biomejs/biome format --write ./src",
+    "check": "bunx --bun @biomejs/biome check ./src",
+    "lint": "bunx --bun @biomejs/biome lint ./src"
+  },
+  "dependencies": {
+    "tsx": "^4.0.0",
+    "typescript": "^5.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.1"
+  }
+}
