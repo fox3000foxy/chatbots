@@ -1,9 +1,9 @@
-import { Eliza, readElizaScript } from "./eliza/src/eliza.ts";
-import { Parry } from "./parry/src/parry.ts";
 import { readFileSync } from "node:fs";
+import { Eliza, readElizaScript } from "./eliza/src/eliza";
+import { Parry } from "./parry/src/parry";
 
 const DOCTOR_SCRIPT = readFileSync("./eliza/scripts/ELIZA-script-DOCTOR-original-1966-CACM-appendix.txt", "utf-8");
-const PARRY_DATA = "./parry";
+const PARRY_DATA = "./parry/original-code";
 
 const MAX_TURNS = 25;
 

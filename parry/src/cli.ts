@@ -1,7 +1,7 @@
 import * as readline from "node:readline";
 import { Parry } from "./parry";
 
-const DATA_DIR = process.argv[2] || ".";
+const DATA_DIR = process.argv[2] || "./original-code";
 
 function main() {
 	const parry = new Parry();
