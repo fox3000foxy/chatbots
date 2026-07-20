@@ -8,9 +8,10 @@
     "build": "tsc"
   },
   "dependencies": {
+    "@types/node": "^26.1.1",
     "aimlinterpreter": "0.1.7",
+    "dom-js": "^0.0.9",
     "tsx": "^4.0.0",
-    "typescript": "^5.0.0",
-    "@types/node": "^26.1.1"
+    "typescript": "^5.0.0"
   }
 }
