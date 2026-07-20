@@ -9,29 +9,29 @@
  * was said next on that earlier occasion.
  */
 export interface TranscriptLine {
-  id: number;
-  speaker: "human" | "bot";
-  text: string;
-  /** id of the line this one was said in direct response to, if any */
-  respondsTo: number | null;
-  /** unix ms timestamp */
-  createdAt: number;
-  /** which conversation/session this line belongs to */
-  sessionId: string;
+	id: number;
+	speaker: "human" | "bot";
+	text: string;
+	/** id of the line this one was said in direct response to, if any */
+	respondsTo: number | null;
+	/** unix ms timestamp */
+	createdAt: number;
+	/** which conversation/session this line belongs to */
+	sessionId: string;
 }
 
 export interface Candidate {
-  line: TranscriptLine;
-  /** the line that historically followed `line` - what we'd say back */
-  reply: TranscriptLine;
-  score: number;
+	line: TranscriptLine;
+	/** the line that historically followed `line` - what we'd say back */
+	reply: TranscriptLine;
+	score: number;
 }
 
 export interface BotConfig {
-  /** how many previous turns of context to weigh when matching */
-  contextWindow: number;
-  /** how many top candidates to sample the final reply from */
-  topK: number;
-  /** minimum similarity score to accept a match at all */
-  minScore: number;
+	/** how many previous turns of context to weigh when matching */
+	contextWindow: number;
+	/** how many top candidates to sample the final reply from */
+	topK: number;
+	/** minimum similarity score to accept a match at all */
+	minScore: number;
 }
