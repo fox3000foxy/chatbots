@@ -4,6 +4,8 @@
   "scripts": {
     "eliza": "tsx eliza/src/cli.ts",
     "parry": "tsx parry/src/cli.ts",
+    "alice": "tsx alice/src/cli.ts",
+    "jabbberwacky": "tsx jabberwacky/src/index.ts",
     "meeting": "tsx parry-eliza.ts"
   },
   "dependencies": {
