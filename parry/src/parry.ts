@@ -1,4 +1,4 @@
-import { readFileSync, existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 
 interface Emotions {
 	anger: number;
@@ -412,20 +412,24 @@ export class Parry {
 	}
 
 	private express(num: number): string | null {
-		const fromPdat = this.pdat.get(num);
-		if (fromPdat) return fromPdat;
-		return this.synthetic(num);
+		return this.pdat.get(num) ?? null;
+	}
+
+	private expressOrSynth(num: number): string {
+		return this.pdat.get(num) ?? this.synthetic(num);
 	}
 
 	private synthetic(n: number): string {
 		const r: Record<number, string[]> = {
+			0: ["I DON'T KNOW WHAT YOU MEAN.", "WHAT?", "I DON'T FOLLOW."],
+			8: ["I SEE.", "OK."],
 			10: ["WHAT DO YOU WANT?", "YEAH? WHAT IS IT?"],
 			16: ["GO ON.", "KEEP TALKING."],
 			17: ["I DON'T KNOW.", "MAYBE.", "I'M NOT SURE."],
 			21: ["I DON'T LIKE TALKING ABOUT FEELINGS.", "WHY DO YOU KEEP ASKING ABOUT FEELINGS?"],
 			24: ["WHAT IS THERE TO SAY?", "I DON'T HAVE MUCH TO SAY ABOUT IT."],
 			42: ["WHAT DO YOU WANT TO TALK ABOUT?", "I'M HERE. WHAT NOW?"],
-			56: ["I'M IN THE HOSPITAL. THEY PUT ME HERE.", "I'M SUPPOSED TO BE IN THE HOSPITAL."],
+			56: ["I'M IN THE HOSPITAL. THEY PUT ME HERE.", "I SHOULDN'T BE IN HERE."],
 			70: ["THE DOCTORS DON'T REALLY LISTEN.", "DOCTORS ARE ALL THE SAME."],
 			104: ["I DON'T TRUST DOCTORS.", "DOCTORS ACT LIKE THEY KNOW EVERYTHING."],
 			128: ["THAT'S A FUNNY QUESTION.", "WHY WOULD YOU ASK THAT?"],
@@ -437,9 +441,21 @@ export class Parry {
 			600: ["THERE'S NOTHING TO TELL.", "I DON'T WANT TO TALK ABOUT MYSELF.", "WHAT ABOUT YOU INSTEAD?"],
 			630: ["WHY DO YOU KEEP ASKING ABOUT ME?", "WHAT DO YOU WANT?", "THAT'S MY BUSINESS."],
 			1020: ["I WANT TO GET OUT OF HERE.", "THEY WON'T LET ME LEAVE.", "I SHOULDN'T BE HERE."],
+			1432: ["I DON'T KNOW WHAT TO SAY.", "I CAN'T ANSWER THAT."],
 			1536: ["WHAT MAKES YOU SAY THAT?", "THAT'S WHAT YOU THINK."],
+			1970: ["MAYBE.", "I DON'T KNOW.", "I'M NOT SURE WHAT TO SAY."],
+			1992: ["THAT'S WHAT I THINK.", "YEAH, I GUESS SO.", "I SUPPOSE."],
 			3000: ["WHAT DO YOU MEAN BY THAT?", "I DON'T FOLLOW YOU.", "THAT DOESN'T MAKE SENSE."],
 			4924: ["I DON'T KNOW WHAT YOU'RE TALKING ABOUT.", "YOU'RE NOT MAKING SENSE.", "I DON'T KNOW."],
+			5004: ["THAT'S NOT TRUE.", "YOU'RE WRONG ABOUT THAT.", "I DON'T BELIEVE IT."],
+			5134: ["I DON'T CARE.", "IT DOESN'T MATTER.", "WHY ARE YOU ASKING?"],
+			5168: ["I DON'T TRUST ANYONE.", "YOU CAN'T TRUST PEOPLE.", "EVERYONE HAS AN ANGLE."],
+			5195: ["I'M NOT COMFORTABLE TALKING ABOUT THAT.", "I DON'T WANT TO DISCUSS IT."],
+			5228: ["I'M NOT SURE.", "I DON'T HAVE AN OPINION.", "I HAVEN'T THOUGHT ABOUT IT."],
+			5229: ["THAT'S ABOUT ME.", "THAT'S PERSONAL.", "I DON'T WANT TO TALK ABOUT ME."],
+			5230: ["I DON'T KNOW WHAT YOU'RE GETTING AT.", "WHAT ARE YOU DRIVING AT?", "I DON'T FOLLOW YOUR LINE OF QUESTIONING."],
+			5231: ["I'M TIRED OF QUESTIONS.", "CAN WE TALK ABOUT SOMETHING ELSE?", "CHANGE THE SUBJECT."],
+			5244: ["I DON'T HAVE MUCH TO SAY.", "THAT'S ALL THERE IS TO IT.", "THAT'S HOW IT IS."],
 		};
 		const alts = r[n];
 		if (!alts) return "I DON'T KNOW.";
@@ -489,8 +505,8 @@ export class Parry {
 		}
 
 		// SPECFN
-		if (tokens.includes("GO") || tokens.includes("CONTINUE")) return this.finalizeResponse(this.express(16) ?? "");
-		if (tokens.includes("ELAB")) return this.finalizeResponse(this.express(24) ?? "");
+		if (tokens.includes("GO") || tokens.includes("CONTINUE")) return this.finalizeResponse(this.expressOrSynth(16));
+		if (tokens.includes("ELAB")) return this.finalizeResponse(this.expressOrSynth(24));
 
 		// FLAREREF
 		if (this.checkFlare(tokens)) {
@@ -508,20 +524,17 @@ export class Parry {
 			this.delFlag = true;
 			this.flare = "INIT";
 			this.topic = "DELUSIONS";
-			const r = this.express(1020);
-			if (r) return this.finalizeResponse(r);
+			return this.finalizeResponse(this.expressOrSynth(1020));
 		}
 
 		// MISCQ
 		if (tokens[0] === "WHY" || tokens[0] === "HOW") {
-			const r = this.express(200);
-			if (r) return this.finalizeResponse(r);
+			return this.finalizeResponse(this.expressOrSynth(200));
 		}
 
 		// MISCS
 		if (tokens.includes("HELLO") || tokens.includes("HI")) {
-			const r = this.express(10);
-			if (r) return this.finalizeResponse(r);
+			return this.finalizeResponse(this.expressOrSynth(10));
 		}
 
 		// KEYWORD fallback with cycling alternatives
@@ -536,8 +549,7 @@ export class Parry {
 		};
 		for (const [kw, alts] of Object.entries(kwMap)) {
 			if (tokens.includes(kw)) {
-				const r = this.express(this.pick(kw, alts));
-				if (r) return this.finalizeResponse(r);
+				return this.finalizeResponse(this.expressOrSynth(this.pick(kw, alts)));
 			}
 		}
 
