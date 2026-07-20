@@ -1,0 +1,13 @@
+{
+  "name": "chatbots",
+  "private": true,
+  "scripts": {
+    "eliza": "tsx eliza/src/cli.ts",
+    "parry": "tsx parry/src/cli.ts",
+    "meeting": "tsx parry-eliza.ts"
+  },
+  "dependencies": {
+    "tsx": "^4.0.0",
+    "typescript": "^5.0.0"
+  }
+}

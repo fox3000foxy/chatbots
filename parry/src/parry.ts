@@ -418,30 +418,34 @@ export class Parry {
 	}
 
 	private synthetic(n: number): string {
-		const r: Record<number, string> = {
-			10: "HELLO. WHAT DO YOU WANT?",
-			16: "PLEASE GO ON.",
-			17: "WHAT MAKES YOU FEEL THAT WAY?",
-			21: "I SEE. TELL ME MORE ABOUT YOUR FEELINGS.",
-			24: "CAN YOU ELABORATE ON THAT?",
-			42: "HELLO. WHAT DO YOU WANT TO TALK ABOUT?",
-			56: "I'M IN THE HOSPITAL.",
-			70: "THE DOCTORS HERE ARE OK I GUESS.",
-			104: "THE DOCTOR SEEMS ALRIGHT.",
-			128: "I DON'T KNOW WHY YOU ASK THAT.",
-			150: "WHY DO YOU WANT TO KNOW ABOUT THE DOCTOR?",
-			200: "WHY DO YOU ASK?",
-			384: "I DON'T KNOW WHAT TO SAY ABOUT THAT.",
-			408: "WHAT ABOUT ME?",
-			528: "THE MAFIA IS AFTER ME. THAT'S WHAT I THINK.",
-			600: "I DON'T KNOW WHAT TO SAY ABOUT MYSELF.",
-			630: "WHY ARE YOU ASKING ABOUT ME?",
-			1020: "I WANT TO GET OUT OF HERE.",
-			1536: "WHAT MAKES YOU SAY THAT?",
-			3000: "WHAT DO YOU MEAN BY THAT?",
-			4924: "I DON'T KNOW WHAT YOU'RE TALKING ABOUT.",
+		const r: Record<number, string[]> = {
+			10: ["HELLO. WHAT DO YOU WANT?", "HI. WHAT CAN I DO FOR YOU?"],
+			16: ["PLEASE GO ON.", "CONTINUE PLEASE.", "GO ON."],
+			17: ["WHAT MAKES YOU FEEL THAT WAY?", "TELL ME MORE ABOUT THAT."],
+			21: ["I SEE. TELL ME MORE ABOUT YOUR FEELINGS.", "WHAT ARE YOUR FEELINGS ABOUT THAT?"],
+			24: ["CAN YOU ELABORATE ON THAT?", "PLEASE EXPLAIN FURTHER."],
+			42: ["HELLO. WHAT DO YOU WANT TO TALK ABOUT?", "HELLO. I'M HERE."],
+			56: ["I'M IN THE HOSPITAL.", "I'M A PATIENT HERE AT THE HOSPITAL."],
+			70: ["THE DOCTORS HERE ARE OK I GUESS.", "THE DOCTORS ARE ALRIGHT."],
+			104: ["THE DOCTOR SEEMS ALRIGHT.", "I GUESS THE DOCTOR IS OK."],
+			128: ["I DON'T KNOW WHY YOU ASK THAT.", "THAT'S A STRANGE QUESTION."],
+			150: ["WHY DO YOU WANT TO KNOW ABOUT THE DOCTOR?", "THE DOCTOR AND I HAVE OUR DIFFICULTIES."],
+			200: ["WHY DO YOU ASK?", "WHAT MAKES YOU ASK THAT?", "I DON'T KNOW WHY YOU WANT TO KNOW."],
+			384: ["I DON'T KNOW WHAT TO SAY ABOUT THAT.", "THAT'S HARD TO EXPLAIN.", "I'M NOT SURE."],
+			408: ["WHAT ABOUT ME?", "WHY ARE YOU ASKING ABOUT ME?", "WHAT DO YOU WANT TO KNOW ABOUT ME?"],
+			528: ["THE MAFIA IS AFTER ME. THAT'S WHAT I THINK.", "I'M BEING FOLLOWED BY THE MAFIA."],
+			600: ["I DON'T KNOW WHAT TO SAY ABOUT MYSELF.", "THERE'S NOT MUCH TO TELL ABOUT ME.", "I'M JUST A GUY IN THE HOSPITAL."],
+			630: ["WHY ARE YOU ASKING ABOUT ME?", "WHAT DO YOU WANT TO KNOW?", "THAT'S NOT IMPORTANT."],
+			1020: ["I WANT TO GET OUT OF HERE.", "THEY WON'T LET ME LEAVE.", "I SHOULDN'T BE HERE."],
+			1536: ["WHAT MAKES YOU SAY THAT?", "THAT'S INTERESTING YOU SHOULD SAY THAT."],
+			3000: ["WHAT DO YOU MEAN BY THAT?", "I DON'T FOLLOW YOU."],
+			4924: ["I DON'T KNOW WHAT YOU'RE TALKING ABOUT.", "YOU'RE NOT MAKING SENSE.", "I DON'T UNDERSTAND."],
 		};
-		return r[n] ?? "I DON'T KNOW WHAT YOU MEAN.";
+		const alts = r[n];
+		if (!alts) return "I DON'T KNOW WHAT YOU MEAN.";
+		const idx = (this.kwCycle.get(`__synth_${n}`) ?? 0) % alts.length;
+		this.kwCycle.set(`__synth_${n}`, idx + 1);
+		return alts[idx];
 	}
 
 	private expressFlare(setName: string): string {
@@ -460,6 +464,14 @@ export class Parry {
 			POLICESET: "THE POLICE DON'T DO ANYTHING ABOUT REAL CRIME.",
 		};
 		return r[setName] ?? "I DON'T KNOW WHAT YOU MEAN.";
+	}
+
+	private kwCycle = new Map<string, number>();
+
+	private pick(keyword: string, alternatives: number[]): number {
+		const idx = (this.kwCycle.get(keyword) ?? 0) % alternatives.length;
+		this.kwCycle.set(keyword, idx + 1);
+		return alternatives[idx];
 	}
 
 	response(input: string): string {
@@ -512,12 +524,19 @@ export class Parry {
 			if (r) return this.finalizeResponse(r);
 		}
 
-		// KEYWORD fallback
-		const keywords = ["YOU", "I", "DOCTOR", "HOSPITAL", "FEEL", "THINK", "WANT"];
-		for (const kw of keywords) {
+		// KEYWORD fallback with cycling alternatives
+		const kwMap: Record<string, number[]> = {
+			I: [600, 630, 4924],
+			YOU: [630, 600, 408],
+			DOCTOR: [150, 104, 70],
+			HOSPITAL: [70, 56, 150],
+			FEEL: [21, 384, 4924],
+			THINK: [600, 384, 4924],
+			WANT: [1020, 528, 128],
+		};
+		for (const [kw, alts] of Object.entries(kwMap)) {
 			if (tokens.includes(kw)) {
-				const map: Record<string, number> = { I: 600, YOU: 630, DOCTOR: 150, HOSPITAL: 70, FEEL: 21, THINK: 600, WANT: 1020 };
-				const r = this.express(map[kw] ?? 4924);
+				const r = this.express(this.pick(kw, alts));
 				if (r) return this.finalizeResponse(r);
 			}
 		}
