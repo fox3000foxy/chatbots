@@ -459,9 +459,7 @@ export class Parry {
 		};
 		const alts = r[n];
 		if (!alts) return "I DON'T KNOW.";
-		const idx = (this.kwCycle.get(`__synth_${n}`) ?? 0) % alts.length;
-		this.kwCycle.set(`__synth_${n}`, idx + 1);
-		return alts[idx];
+		return alts[this.randomIdx(alts.length, `synth_${n}`)];
 	}
 
 	private expressFlare(setName: string): string {
@@ -482,12 +480,25 @@ export class Parry {
 		return r[setName] ?? "I DON'T KNOW WHAT YOU MEAN.";
 	}
 
-	private kwCycle = new Map<string, number>();
+	private lastKw = new Map<string, number>();
 
 	private pick(keyword: string, alternatives: number[]): number {
-		const idx = (this.kwCycle.get(keyword) ?? 0) % alternatives.length;
-		this.kwCycle.set(keyword, idx + 1);
-		return alternatives[idx];
+		const avoid = this.lastKw.get(keyword);
+		const filtered = alternatives.filter((_, i) => i !== avoid);
+		const idx = filtered.length > 0 ? filtered[Math.floor(Math.random() * filtered.length)] : alternatives[Math.floor(Math.random() * alternatives.length)];
+		const actualIdx = alternatives.indexOf(idx);
+		this.lastKw.set(keyword, actualIdx);
+		return idx;
+	}
+
+	private randomIdx(len: number, key: string): number {
+		const avoid = this.lastKw.get(key);
+		let idx: number;
+		do {
+			idx = Math.floor(Math.random() * len);
+		} while (idx === avoid && len > 1);
+		this.lastKw.set(key, idx);
+		return idx;
 	}
 
 	response(input: string): string {
