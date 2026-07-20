@@ -1,0 +1,16 @@
+{
+  "name": "alice-ts",
+  "version": "1.0.0",
+  "description": "Faithful TypeScript port of A.L.I.C.E. (1995) using AIML.js and Free ALICE AIML files",
+  "type": "module",
+  "scripts": {
+    "start": "tsx src/cli.ts",
+    "build": "tsc"
+  },
+  "dependencies": {
+    "aimlinterpreter": "0.1.7",
+    "tsx": "^4.0.0",
+    "typescript": "^5.0.0",
+    "@types/node": "^26.1.1"
+  }
+}
