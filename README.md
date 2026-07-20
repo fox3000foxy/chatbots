@@ -1,17 +1,18 @@
-# Chatbots — ELIZA, PARRY, and ALICE
+# Chatbots — ELIZA, PARRY, ALICE, and Jabberwacky
 
-Three landmark conversational agents from the history of artificial intelligence, faithfully ported to TypeScript. Each preserves the original data files, control flow, and architectural design of the source systems.
+Four landmark conversational agents from the history of artificial intelligence, faithfully ported to TypeScript. Each preserves the original data files, control flow, and architectural design of the source system.
 
 ## Quick Start
 
 ```bash
-bun run eliza    # Interactive conversation with ELIZA/DOCTOR
-bun run parry    # Interactive conversation with PARRY
-bun run alice    # Interactive conversation with ALICE
+bun run eliza    # Interactive conversation with ELIZA/DOCTOR (1966)
+bun run parry    # Interactive conversation with PARRY (1972)
+bun run alice    # Interactive conversation with ALICE (1995)
+bun run jabber   # Interactive conversation with Jabberwacky (2000s)
 bun run meeting  # Automated ELIZA ↔ PARRY conversation (RFC 439)
 ```
 
-Type `goodbye` to exit any interactive session. Use `--script <path>` with ELIZA to load custom `.ela` scripts. Run `bun run biome check .` to lint — 0 errors expected.
+Type `goodbye` to exit any interactive session (Jabberwacky: `/quit`). Use `--script <path>` with ELIZA to load custom `.ela` scripts. Run `bun run biome check .` to lint — 0 errors expected.
 
 ---
 
@@ -340,6 +341,50 @@ Input: "WHAT'S UP?"
 
 ---
 
+## Jabberwacky (≈2000s) — Rollo Carpenter
+
+Jabberwacky is a **transcript-based chatbot** with no rules, no patterns, and no knowledge base. Instead of hand-authored scripts (ELIZA/PARRY) or curated XML categories (ALICE), it learns entirely from conversation transcripts: every line ever said is stored in a chronological log, and new input is answered by finding a similar moment in history and reusing whatever was said next on that earlier occasion.
+
+### Architecture
+
+The transcript is a flat, ever-growing JSON file. Each line records the speaker (`"human"` or `"bot"`), the text, a `respondsTo` pointer linking it to the line it replied to, and a session ID. There is no separate rule base — the transcript *is* the bot's brain.
+
+When the user speaks, the engine:
+
+1. **Scores every past line** by relevance to the new input using a string similarity function.
+2. **Adjusts scores** by context fit: how well the recent conversation history matches what historically preceded each candidate line.
+3. **Adds a recency bonus**: newer conversations score slightly higher, so the bot's personality can drift as it learns.
+4. **Picks probabilistically** from the top K candidates, weighted by score — the same line isn't always chosen, producing natural variation.
+
+```mermaid
+flowchart TD
+    A["User input"] --> B["Similarity scan<br>compare against EVERY<br>past human line"]
+    B --> C["Score = 0.65 × relevance<br>+ 0.25 × context fit<br>+ 0.10 × recency"]
+    C --> D["Keep top K candidates"]
+    D --> E["Weighted random pick<br>(higher score = more likely)"]
+    E --> F{"Candidate found?"}
+    F -->|"Yes"| G["Reply with whatever was<br>said next in that<br>historical conversation"]
+    F -->|"No"| H["Fallback: generic response"]
+    G --> I["Append to transcript<br>save to JSON"]
+    H --> I
+```
+
+### Seed Data
+
+The initial `data/transcript.json` contains a small set of seed conversations. As the bot converses, it appends every exchange, gradually building a larger memory and becoming more coherent over time.
+
+### Key Differences from the Other Bots
+
+| Aspect | Jabberwacky | ELIZA / PARRY / ALICE |
+|--------|-------------|----------------------|
+| Knowledge | Learned from conversation | Hand-authored (scripts, patterns, AIML) |
+| State | Flat transcript, no structure | Rule tables, belief networks, XML categories |
+| Learning | Appends every exchange to memory | Static — no runtime learning |
+| Coherence | Improves with more data | Fixed from the start |
+| Personality | Drifts with new conversations | Fixed by script content |
+
+---
+
 ## ELIZA vs PARRY (RFC 439)
 
 The first conversation between two AI programs occurred on **September 18, 1972** over the **ARPANET**. ELIZA (running Weizenbaum's DOCTOR script at BBN) conversed with PARRY (running at Stanford) via teletype, mediated by human operators who typed each bot's output to the other.
@@ -394,8 +439,12 @@ chatbots/
 │   ├── src/alice.ts        # Core engine: XML parser, pattern matcher
 │   ├── src/cli.ts          # Interactive CLI
 │   └── aiml/               # 66 AIML files, 99,524 categories
+├── jabberwacky/
+│   ├── src/                # Engine: transcript store, similarity matcher
+│   ├── dist/               # Compiled JS
+│   └── data/               # Seed conversations (grows with use)
 ├── parry-eliza.ts           # RFC 439 meeting simulation
-├── package.json             # Scripts: eliza, parry, alice, meeting
+├── package.json             # Scripts: eliza, parry, alice, jabber, meeting
 ├── tsconfig.json
 └── biome.json               # Linting and formatting config
 ```
