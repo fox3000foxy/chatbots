@@ -29,7 +29,7 @@ function main() {
 	console.log();
 
 	const startMsg = SEEDS[Math.floor(Math.random() * SEEDS.length)];
-	console.log(`[ELIZA] ${startMsg}\n`);
+	console.log(`[ELIZA] ${startMsg}`);
 
 	let lastLine = startMsg;
 	let repeatCount = 0;
@@ -54,7 +54,7 @@ function main() {
 		}
 
 		const elizaResponse = eliza.response(parryResponse);
-		console.log(`[ELIZA] ${elizaResponse}\n`);
+		console.log(`[ELIZA] ${elizaResponse}`);
 
 		lastLine = elizaResponse;
 	}
