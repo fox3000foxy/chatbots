@@ -678,7 +678,7 @@ function readElizaScript(source: string): ScriptData {
         let sub = '';
         t = tok.nexttok();
         while (t.type !== TokenType.CLOSE) {
-          if (t.type !== TokenType.SYMBOL) errmsg('expected symbol in sublist');
+          if (t.type !== TokenType.SYMBOL && t.type !== TokenType.NUMBER) errmsg('expected symbol or number in sublist');
           if (sub) sub += ' ';
           sub += t.value;
           t = tok.nexttok();
@@ -745,6 +745,17 @@ function readElizaScript(source: string): ScriptData {
 
   const readKeywordRule = () => {
     const t = tok.nexttok();
+    // YAPYAP uses numeric labels like (100 $ ...) — skip these extension rules
+    if (t.type === TokenType.NUMBER) {
+      let depth = 1;
+      while (depth > 0) {
+        const sk = tok.nexttok();
+        if (sk.type === TokenType.EOF) return;
+        if (sk.type === TokenType.OPEN) depth++;
+        if (sk.type === TokenType.CLOSE) depth--;
+      }
+      return;
+    }
     let keyword = t.value;
     let kwSub = '';
     let precedence = 0;
@@ -753,6 +764,17 @@ function readElizaScript(source: string): ScriptData {
     let className = '';
 
     if (keyword === 'NONE') keyword = SPECIAL_NONE;
+    if (keyword.startsWith('DO(')) {
+      // YAPYAP DO(UNSAVE...) extension — skip this rule entirely
+      let depth = 1;
+      while (depth > 0) {
+        const sk = tok.nexttok();
+        if (sk.type === TokenType.EOF) return;
+        if (sk.type === TokenType.OPEN) depth++;
+        if (sk.type === TokenType.CLOSE) depth--;
+      }
+      return;
+    }
     if (script.rules.has(keyword)) errmsg(`keyword rule already specified for '${keyword}'`);
 
     if (tok.peektok().type === TokenType.CLOSE) errmsg(`keyword '${keyword}' has no associated body`);
@@ -766,6 +788,9 @@ function readElizaScript(source: string): ScriptData {
         precedence = parseInt(t2.value, 10);
       } else if (t2.value === 'DLIST') {
         tags = rdlist();
+      } else if (t2.value === 'DO') {
+        // YAPYAP extension: DO(/YACK) etc — consume but ignore
+        rdlist();
       } else if (t2.type === TokenType.OPEN) {
         if (tok.peektok().value === '=') {
           tok.nexttok(); // =
@@ -775,7 +800,7 @@ function readElizaScript(source: string): ScriptData {
           tok.nexttok(); // ) close reference, leave keyword ) for loop condition
         } else {
           const decomp = rdlist();
-          // empty decompose pattern () is allowed - matches empty input
+          // empty decompose pattern () is allowed — matches empty input
           const reass: StringList[] = [];
           do {
             reass.push(readReassembly());
@@ -784,15 +809,26 @@ function readElizaScript(source: string): ScriptData {
           transforms.push({ decomp, reass });
         }
       } else {
-        errmsg('malformed rule');
+        // YAPYAP / other extensions ($, GOTO, REPLY, etc) — skip by consuming rest of rule
+        let depth = 1;
+        while (depth > 0) {
+          const sk = tok.nexttok();
+          if (sk.type === TokenType.EOF) break;
+          if (sk.type === TokenType.OPEN) depth++;
+          if (sk.type === TokenType.CLOSE) depth--;
+        }
+        break;
       }
     }
 
-    const rule = new RuleKeyword(keyword, kwSub, precedence, tags, className);
-    for (const tr of transforms) {
-      rule.addTransform(tr.decomp, tr.reass);
+    // Only register rule if it has transforms (skip YAPYAP extension stubs)
+    if (transforms.length > 0 || className) {
+      const rule = new RuleKeyword(keyword, kwSub, precedence, tags, className);
+      for (const tr of transforms) {
+        rule.addTransform(tr.decomp, tr.reass);
+      }
+      script.rules.set(keyword, rule);
     }
-    script.rules.set(keyword, rule);
   };
 
   const readRule = (): boolean => {
@@ -817,12 +853,25 @@ function readElizaScript(source: string): ScriptData {
 
   while (readRule()) { /* empty */ }
 
-  if (!script.rules.has(SPECIAL_NONE))
-    errmsg('no NONE rule specified');
-  if (!script.memRule.keyword)
-    errmsg('no MEMORY rule specified');
-  if (!script.rules.has(script.memRule.keyword))
-    errmsg(`MEMORY rule keyword '${script.memRule.keyword}' is not also a keyword`);
+  if (!script.rules.has(SPECIAL_NONE)) {
+    const noneRule = new RuleKeyword(SPECIAL_NONE, '', 0, [], '');
+    noneRule.addTransform(['0'], [
+      ['PLEASE', 'GO', 'ON'],
+      ['I', 'AM', 'NOT', 'SURE', 'I', 'UNDERSTAND', 'YOU', 'FULLY'],
+      ['WHAT', 'DOES', 'THAT', 'SUGGEST', 'TO', 'YOU'],
+      ['PLEASE', 'CONTINUE'],
+    ]);
+    script.rules.set(SPECIAL_NONE, noneRule);
+  }
+  if (!script.memRule.keyword) {
+    const memRule = new RuleMemory('MY');
+    const memDecomp = ['0', 'YOUR', '0'];
+    memRule.addTransform(memDecomp, [['LETS', 'DISCUSS', 'FURTHER', 'WHY', 'YOUR', '3']]);
+    memRule.addTransform(memDecomp, [['EARLIER', 'YOU', 'SAID', 'YOUR', '3']]);
+    memRule.addTransform(memDecomp, [['BUT', 'YOUR', '3']]);
+    memRule.addTransform(memDecomp, [['DOES', 'THAT', 'HAVE', 'ANYTHING', 'TO', 'DO', 'WITH', 'THE', 'FACT', 'THAT', 'YOUR', '3']]);
+    script.memRule = memRule;
+  }
 
   return script;
 }

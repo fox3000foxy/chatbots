@@ -6,6 +6,7 @@
   "scripts": {
     "start": "tsx src/cli.ts",
     "build": "tsc",
+    "default": "tsx src/cli.ts --script scripts/default.txt",
     "doctor": "tsx src/cli.ts --script scripts/ELIZA-script-DOCTOR-original-1966-CACM-appendix.txt",
     "yapyap": "tsx src/cli.ts --script scripts/ELIZA-script-YAPYAP-original.txt",
     "yapyap-cacm": "tsx src/cli.ts --script scripts/ELIZA-script-YAPYAP-modified-for-1966-CACM-ELIZA.txt",
