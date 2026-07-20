@@ -1,0 +1,19 @@
+{
+  "name": "eliza-ts",
+  "version": "1.0.0",
+  "description": "Faithful TypeScript port of Weizenbaum's 1966 ELIZA, based on the rediscovered MAD-SLIP source code via anthay/ELIZA",
+  "type": "module",
+  "scripts": {
+    "start": "tsx src/cli.ts",
+    "build": "tsc",
+    "doctor": "tsx src/cli.ts --script scripts/ELIZA-script-DOCTOR-original-1966-CACM-appendix.txt",
+    "yapyap": "tsx src/cli.ts --script scripts/ELIZA-script-YAPYAP-original.txt"
+  },
+  "dependencies": {
+    "tsx": "^4.0.0",
+    "typescript": "^5.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.1"
+  }
+}
