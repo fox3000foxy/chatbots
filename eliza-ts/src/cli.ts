@@ -1,6 +1,6 @@
-import { existsSync, readFileSync } from 'node:fs';
-import * as readline from 'node:readline';
-import { Eliza, readElizaScript } from './eliza.js';
+import { existsSync, readFileSync } from "node:fs";
+import * as readline from "node:readline";
+import { Eliza, readElizaScript } from "./eliza.js";
 
 const DEFAULT_DOCTOR = `;
 ; Joseph Weizenbaum's DOCTOR script for ELIZA (1966)
@@ -349,68 +349,66 @@ START
 `;
 
 function main() {
-  const args = process.argv.slice(2);
-  let scriptPath = '';
-  for (let i = 0; i < args.length; i++) {
-    if (args[i] === '--script' && i + 1 < args.length) {
-      scriptPath = args[i + 1];
-      i++;
-    }
-  }
+	const args = process.argv.slice(2);
+	let scriptPath = "";
+	for (let i = 0; i < args.length; i++) {
+		if (args[i] === "--script" && i + 1 < args.length) {
+			scriptPath = args[i + 1];
+			i++;
+		}
+	}
 
-  let source: string;
-  if (scriptPath) {
-    if (!existsSync(scriptPath)) {
-      console.error(`Error: script file not found: ${scriptPath}`);
-      process.exit(1);
-    }
-    source = readFileSync(scriptPath, 'utf-8');
-    console.log(`Loaded script: ${scriptPath}`);
-  } else {
-    source = DEFAULT_DOCTOR;
-    console.log('Using built-in DOCTOR script (1966 CACM)');
-  }
+	let source: string;
+	if (scriptPath) {
+		if (!existsSync(scriptPath)) {
+			console.error(`Error: script file not found: ${scriptPath}`);
+			process.exit(1);
+		}
+		source = readFileSync(scriptPath, "utf-8");
+		console.log(`Loaded script: ${scriptPath}`);
+	} else {
+		source = DEFAULT_DOCTOR;
+		console.log("Using built-in DOCTOR script (1966 CACM)");
+	}
 
-  let script: ReturnType<typeof readElizaScript>;
-  try {
-    script = readElizaScript(source);
-  } catch (e) {
-    console.error('Error loading script:', e instanceof Error ? e.message : e);
-    process.exit(1);
-  }
+	let script: ReturnType<typeof readElizaScript>;
+	try {
+		script = readElizaScript(source);
+	} catch (err) {
+		console.error("Error loading script:", err instanceof Error ? err.message : err);
+		process.exit(1);
+	}
 
-  const eliza = new Eliza(script.rules, script.memRule);
+	const eliza = new Eliza(script.rules, script.memRule);
 
-  const greeting = script.helloMessage.length > 0
-    ? script.helloMessage.join(' ')
-    : 'HOW DO YOU DO.  PLEASE TELL ME YOUR PROBLEM';
+	const greeting = script.helloMessage.length > 0 ? script.helloMessage.join(" ") : "HOW DO YOU DO.  PLEASE TELL ME YOUR PROBLEM";
 
-  console.log(`\n${'='.repeat(60)}`);
-  console.log('  ELIZA (1966) — Faithful TypeScript Port');
-  console.log('  Based on the rediscovered MAD-SLIP source code');
-  console.log(`${'='.repeat(60)}\n`);
-  console.log(`ELIZA: ${greeting}\n`);
+	console.log(`\n${"=".repeat(60)}`);
+	console.log("  ELIZA (1966) — Faithful TypeScript Port");
+	console.log("  Based on the rediscovered MAD-SLIP source code");
+	console.log(`${"=".repeat(60)}\n`);
+	console.log(`ELIZA: ${greeting}\n`);
 
-  const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout,
-  });
+	const rl = readline.createInterface({
+		input: process.stdin,
+		output: process.stdout,
+	});
 
-  function promptUser() {
-    rl.question('YOU: ', (input) => {
-      const trimmed = input.trim();
-      if (trimmed === '' || trimmed.toUpperCase() === 'GOODBYE') {
-        console.log('\nELIZA: GOODBYE.  THANK YOU FOR TALKING WITH ME.\n');
-        rl.close();
-        return;
-      }
-      const response = eliza.response(trimmed);
-      console.log(`ELIZA: ${response}\n`);
-      promptUser();
-    });
-  }
+	function promptUser() {
+		rl.question("YOU: ", (input) => {
+			const trimmed = input.trim();
+			if (trimmed === "" || trimmed.toUpperCase() === "GOODBYE") {
+				console.log("\nELIZA: GOODBYE.  THANK YOU FOR TALKING WITH ME.\n");
+				rl.close();
+				return;
+			}
+			const response = eliza.response(trimmed);
+			console.log(`ELIZA: ${response}\n`);
+			promptUser();
+		});
+	}
 
-  promptUser();
+	promptUser();
 }
 
 main();

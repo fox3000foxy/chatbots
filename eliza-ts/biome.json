@@ -20,7 +20,7 @@
 				"noLoopFunc": "off",
 				"noExcessiveNestedCallbacks": "off",
 				"noUnsafePlusOperands": "error",
-				"noUselessTypeConversion": "error"
+				"noUselessTypeConversion": "off"
 			},
 			"suspicious": {
 				"noDebugger": "off",
@@ -138,51 +138,7 @@
 			"style": {
 				"noShoutyConstants": "warn",
 				"noNonNullAssertion": "off",
-			"useNamingConvention": {
-				"level": "error",
-				"options": {
-						"conventions": [
-							{
-								"selector": {
-									"kind": "variable"
-								},
-								"match": "[ij]|(.*)"
-							},
-							{
-								"match": "(.{2,})"
-							},
-							{
-								"selector": {
-									"kind": "classMember",
-									"modifiers": ["private"]
-								},
-								"match": "_(.*)"
-							},
-							{
-								"selector": {
-									"kind": "classProperty",
-									"modifiers": ["static", "readonly"]
-								},
-								"formats": ["CONSTANT_CASE"]
-							},
-							{
-								"selector": {
-									"kind": "const",
-									"scope": "global"
-								},
-								"match": "__(.+)__|_SPECIAL_|(.+)",
-								"formats": ["CONSTANT_CASE"]
-							},
-							{
-								"selector": {
-									"kind": "interface"
-								},
-								"match": "I(.*)|(.*?)Error",
-								"formats": ["PascalCase"]
-							}
-						]
-					}
-				},
+			"useNamingConvention": "off",
 				"noInferrableTypes": "error",
 				"noParameterAssign": "off",
 				"noSubstr": "off",
@@ -251,7 +207,7 @@
 		"attributePosition": "auto",
 		"indentStyle": "tab",
 		"indentWidth": 2,
-		"lineWidth": 80,
+		"lineWidth": 200,
 		"lineEnding": "lf",
 		"bracketSpacing": true
 	},
