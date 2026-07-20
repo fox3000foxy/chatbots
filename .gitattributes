@@ -1,0 +1,2 @@
+*.lap linguist-language=lisp
+*.fai linguist-language=unix-assembly

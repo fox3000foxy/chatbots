@@ -1,0 +1,20 @@
+{
+  "name": "parry-ts",
+  "version": "1.0.0",
+  "description": "Faithful TypeScript port of Colby's 1972 PARRY chatbot, based on the original MLISP source code",
+  "type": "module",
+  "scripts": {
+    "start": "tsx src/cli.ts",
+    "build": "tsc",
+    "format": "bunx --bun @biomejs/biome format --write ./src",
+    "check": "bunx --bun @biomejs/biome check ./src",
+    "lint": "bunx --bun @biomejs/biome lint ./src"
+  },
+  "dependencies": {
+    "tsx": "^4.0.0",
+    "typescript": "^5.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.1"
+  }
+}
