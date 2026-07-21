@@ -348,6 +348,15 @@ START
 ()
 `;
 
+/**
+ * CLI entrypoint: loads either a custom .ela script (via --script <path>) or
+ * falls back to the built-in DEFAULT_DOCTOR script above (a compact, self-
+ * contained copy of Weizenbaum's original 1966 CACM-published DOCTOR
+ * script), then drives a simple readline-based REPL loop where every line
+ * you type is handed to Eliza.response() and the result printed back.
+ * Typing an empty line or "GOODBYE" ends the session - this mirrors the
+ * exit convention of the historical program.
+ */
 function main() {
 	const args = process.argv.slice(2);
 	let scriptPath = "";
@@ -371,6 +380,9 @@ function main() {
 		console.log("Using built-in DOCTOR script (1966 CACM)");
 	}
 
+	// Parsing turns the raw S-expression text into a rule table (see
+	// readElizaScript in eliza.ts); the Eliza instance below is what
+	// actually runs the keyword-matching turn logic against that table.
 	let script: ReturnType<typeof readElizaScript>;
 	try {
 		script = readElizaScript(source);
@@ -384,7 +396,7 @@ function main() {
 	const greeting = script.helloMessage.length > 0 ? script.helloMessage.join(" ") : "HOW DO YOU DO.  PLEASE TELL ME YOUR PROBLEM";
 
 	console.log(`\n${"=".repeat(60)}`);
-	console.log("  ELIZA (1966) — Faithful TypeScript Port");
+	console.log("  ELIZA (1966) -- Faithful TypeScript Port");
 	console.log("  Based on the rediscovered MAD-SLIP source code");
 	console.log(`${"=".repeat(60)}\n`);
 	console.log(`ELIZA: ${greeting}\n`);
@@ -394,6 +406,8 @@ function main() {
 		output: process.stdout,
 	});
 
+	// Recursive prompt loop: each answer immediately re-prompts, so the
+	// conversation continues indefinitely until the exit condition below.
 	function promptUser() {
 		rl.question("YOU: ", (input) => {
 			const trimmed = input.trim();

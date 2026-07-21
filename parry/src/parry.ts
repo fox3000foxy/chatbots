@@ -1,5 +1,47 @@
+/**
+ * ============================================================================
+ * PARRY -- TypeScript port
+ * ============================================================================
+ *
+ * Faithful reimplementation of Kenneth Colby's 1972 PARRY, a simulation of a
+ * patient with paranoid schizophrenia (original: MLISP/FAIL/LAP on a PDP-10).
+ * See this repo's README for the full historical background and the belief-
+ * network / emotional-model reference tables; this file's comments focus on
+ * how the code implements those ideas.
+ *
+ * UNLIKE ELIZA (pure pattern matching with no internal state), PARRY layers
+ * three cooperating systems on top of pattern matching:
+ *
+ *   1. EMOTIONS - four numbers (anger, fear, mistrust, hurt) that decay
+ *      toward a baseline every turn (modifyVariables) and jump upward when
+ *      triggered (applyEmotionalJumps). High fear/anger is what pushes PARRY
+ *      toward its paranoid, defensive responses.
+ *
+ *   2. BELIEFS - a list of (name, strength 0-5, category, negated) records
+ *      representing what PARRY currently believes ("the mafia is after me",
+ *      strength 4). The INFERENCE ENGINE (applyInferences) mutates belief
+ *      strengths and schedules emotional jumps each turn based on simple
+ *      IF/TH2/EMOTE rules loaded from the original data files.
+ *
+ *   3. FLARES - an escalating chain of delusion topics (see checkFlare /
+ *      getFlareSet / the Flare/Delusion hierarchy table in the README).
+ *      Certain trigger words move PARRY from a neutral flare set toward
+ *      increasingly paranoid ones (horses -> horse racing -> gambling ->
+ *      bookies -> the mafia...), and once "delusional mode" (delFlag) is
+ *      entered PARRY's fear stops decaying normally.
+ *
+ * Each turn (see response() near the bottom of this file), PARRY: decays
+ * emotions, runs the inference engine, applies any resulting emotional
+ * jumps, THEN tries (in priority order) a direct pattern match, a few fixed
+ * special cases (continue/elaborate), the flare/delusion system, the
+ * delusion-trigger check, generic why/how questions, greetings, and finally
+ * a keyword-based fallback that cycles between a few canned responses per
+ * keyword so it doesn't repeat itself immediately.
+ */
 import { existsSync, readFileSync } from "node:fs";
 
+/** The four continuously-decaying emotional variables (see README's
+ * "Emotional Model" table for each one's baseline and decay rate). */
 interface Emotions {
 	anger: number;
 	fear: number;
@@ -7,14 +49,22 @@ interface Emotions {
 	hurt: number;
 }
 
+/** Pending emotional "jumps" computed by the inference engine this turn
+ * (applyInferences) and then added onto `emotions` in applyEmotionalJumps,
+ * then reset to zero at the start of the next turn's modifyVariables(). */
 interface EmotionJumps {
 	ajump: number;
 	fjump: number;
 	hjump: number;
 }
 
+/** HUM = self, HUM2 = other people, DOC = the doctor/interviewer, INT = the
+ * interview itself, INN = intentions/motivations - see README's Belief
+ * Network table. */
 type BeliefCategory = "HUM" | "HUM2" | "DOC" | "INT" | "INN";
 
+/** One item in PARRY's belief store: how strongly (0-5) he holds some idea,
+ * what kind of belief it is, and whether it's negated (disbelieved). */
 interface Belief {
 	name: string;
 	strength: number;
@@ -22,18 +72,25 @@ interface Belief {
 	negated: boolean;
 }
 
+/** One rule from the original `inf` data file. TH2 = belief decay/spread,
+ * EMOTE = belief-triggered emotional jump, IF = conditional belief
+ * propagation - see applyInferences() below for how each type is executed. */
 interface Inference {
 	type: "TH2" | "EMOTE" | "IF";
 	condition: string[];
 	consequences: string[];
 }
 
+/** A canonicalised token sequence (see canonicalTokenize) mapped to the
+ * pdat response number it should trigger if matched (see matchPatterns). */
 interface Pattern {
 	tokens: string[];
 	response: number;
 }
 
 export class Parry {
+	// --- Linguistic tables loaded from the original PDP-10 data files (see
+	// loadDataFiles below) - canonicalising words and matching sentences.
 	private synonyms = new Map<string, string>();
 	private simplePatterns: Pattern[] = [];
 	private compoundPatterns: Pattern[] = [];
@@ -46,10 +103,14 @@ export class Parry {
 	private stopWords = new Set<string>();
 	private flags = new Set<string>();
 
+	// --- The emotional model (see interfaces above and modifyVariables /
+	// applyEmotionalJumps below).
 	private emotions: Emotions = { anger: 0, fear: 0, mistrust: 0, hurt: 0 };
 	private baselines: Emotions = { anger: 0, fear: 0, mistrust: 0, hurt: 0 };
 	private jumps: EmotionJumps = { ajump: 0, fjump: 0, hjump: 0 };
 
+	// --- The flare/delusion escalation state (see checkFlare/getFlareSet
+	// and the Flare/Delusion Topic Hierarchy diagram in the README).
 	private delFlag = false;
 	private flare = "INIT";
 	private liveFlares: string[] = [];
@@ -61,6 +122,10 @@ export class Parry {
 	private sensitiveList: string[] = [];
 	private topic: string | null = null;
 	private weight = 0;
+	/** The response database: response-number -> canned text. In the real
+	 * PDP-10 archive this file (`pdatb`) survives only as a skeleton, so
+	 * most entries here are synthesised (see synthetic()) rather than
+	 * recovered originals - see the README's History section. */
 	private pdat = new Map<number, string>();
 
 	private patternRe: RegExp;
@@ -69,6 +134,10 @@ export class Parry {
 		this.patternRe = /^\(\((.*)\)\s+(?:\x02|P)(\d+)\)$/;
 	}
 
+	/** Loads every one of the ~58 original PDP-10 data files (synonym
+	 * dictionary, idiom/irregular-verb tables, belief network, inference
+	 * rules, response patterns, ...) from `dataDir` - see the README's
+	 * "Original Data Files" table for what each file contributes. */
 	loadDataFiles(dataDir: string) {
 		this.loadLines(`${dataDir}/synonm.alf`, (p) => {
 			const m = p.match(/^\((\S+)\s+(\S+)\)/);
@@ -223,11 +292,21 @@ export class Parry {
 		this.sensitiveList = ["LOOKS", "SEXLIFE", "FAMILY", "EDUCATION", "RELIGION"];
 	}
 
+	/** Normalises a word to its canonical form for matching purposes:
+	 * synonym table first (e.g. regional spelling variants), then idioms,
+	 * then irregular verb forms, falling back to the uppercased word itself
+	 * if none of the tables have an entry. */
 	private wordCanonical(word: string): string {
 		const upper = word.toUpperCase();
 		return this.synonyms.get(upper) ?? this.idioms.get(upper) ?? this.irregulars.get(upper) ?? upper;
 	}
 
+	/** Turns a raw input sentence into the canonical token list used for
+	 * pattern matching everywhere else in this class: uppercase, strip
+	 * punctuation, split on whitespace, canonicalise each word (see
+	 * wordCanonical), and truncate long words to 5 characters - mirroring
+	 * the original system's fixed-width "first 5 chars" word representation
+	 * (see the README's synonm.alf description). */
 	private canonicalTokenize(input: string): string[] {
 		const text = input
 			.toUpperCase()
@@ -243,6 +322,9 @@ export class Parry {
 			});
 	}
 
+	/** True if `pattern` appears anywhere as a contiguous subsequence of
+	 * `input` (a simple sliding-window substring search over token arrays;
+	 * an empty pattern always matches, used for wildcard-style entries). */
 	private matchTokens(input: string[], pattern: string[]): boolean {
 		if (pattern.length === 0) return true;
 		if (pattern.length > input.length) return false;
@@ -259,6 +341,10 @@ export class Parry {
 		return false;
 	}
 
+	/** Tries every pattern in order (spats.sel-style simple patterns first,
+	 * then cpats.sel-style compound ones - see the README's data file
+	 * table) and returns the response number of the first one whose token
+	 * sequence appears in the input, or null if none match. */
 	private matchPatterns(tokens: string[], patterns: Pattern[]): number | null {
 		for (const pat of patterns) {
 			if (this.matchTokens(tokens, pat.tokens)) return pat.response;
@@ -266,6 +352,8 @@ export class Parry {
 		return null;
 	}
 
+	/** Returns the first item of `list` that also appears in `tokens`, or
+	 * null - a simple "does the input mention any of these words" check. */
 	private memberAny(list: string[], tokens: string[]): string | null {
 		for (const item of list) {
 			if (tokens.includes(item)) return item;
@@ -273,6 +361,15 @@ export class Parry {
 		return null;
 	}
 
+	/**
+	 * Runs once per turn, BEFORE processing the new input: decays every
+	 * emotion a step toward its baseline (see the README's Emotional Model
+	 * table for each variable's rate), with fear decaying more slowly (or
+	 * not really decaying below +5) while `delFlag` (delusional mode) is
+	 * active - modelling how paranoid fear, once triggered, lingers far
+	 * longer than ordinary anger or hurt. Also clears last turn's emotional
+	 * jumps so applyInferences() can compute fresh ones for this turn.
+	 */
 	private modifyVariables() {
 		this.emotions.anger = Math.max(this.emotions.anger - 1, this.baselines.anger);
 		this.emotions.hurt = Math.max(this.emotions.hurt - 0.5, this.baselines.hurt);
@@ -287,6 +384,10 @@ export class Parry {
 		this.jumps = { ajump: 0, fjump: 0, hjump: 0 };
 	}
 
+	/** Adds this turn's computed jumps (see applyInferences) onto the
+	 * running emotional totals. A hurt-jump also bleeds into anger and
+	 * mistrust, modelling how feeling hurt compounds into anger/suspicion
+	 * rather than staying isolated. */
 	private applyEmotionalJumps() {
 		this.emotions.anger += this.jumps.ajump;
 		this.emotions.fear += this.jumps.fjump;
@@ -294,6 +395,22 @@ export class Parry {
 		this.emotions.mistrust += this.jumps.hjump * 0.5;
 	}
 
+	/**
+	 * The inference engine: walks every rule loaded from the original `inf`
+	 * data file and executes it against the current belief store.
+	 *   - TH2 (belief decay/spread): if belief A is held strongly (> 0),
+	 *     weaken it by 2 and strengthen each of its listed consequences by
+	 *     1 - modelling how one paranoid idea "uses itself up" while
+	 *     spreading suspicion to related beliefs.
+	 *   - EMOTE (emotional jump): if a belief in the consequences list is
+	 *     held (> 0), schedule an anger/fear/hurt jump of the given
+	 *     magnitude (queued in `this.jumps`, applied next by
+	 *     applyEmotionalJumps). A hurt-jump also contributes half its size
+	 *     to anger, same coupling as above.
+	 *   - IF is a straightforward conditional belief propagation and is
+	 *     handled by the data-loading step rather than here (see
+	 *     loadInferences), since IF rules apply once, at load time.
+	 */
 	private applyInferences() {
 		for (const inf of this.inferences) {
 			if (inf.type === "TH2") {
@@ -323,6 +440,18 @@ export class Parry {
 		}
 	}
 
+	/**
+	 * Checks whether any word in the input belongs to a known "flare set"
+	 * (a delusion topic - see getFlareSet/getFlareWeight and the README's
+	 * Flare/Delusion Topic Hierarchy) and, if the highest-weighted match
+	 * outranks the currently active flare (or we're still at the neutral
+	 * "INIT" flare), moves PARRY's current topic (`this.flare`) to it. This
+	 * is the mechanism that lets a conversation drift from "horses" toward
+	 * "horse racing" toward "gambling" toward "the mafia" as the user (even
+	 * innocently) keeps mentioning related words - each step only escalates
+	 * forward, never backward, matching the original's one-way trigger
+	 * chain.
+	 */
 	private checkFlare(inp: string[]): boolean {
 		let nf = "INIT";
 		let result = false;
@@ -404,6 +533,12 @@ export class Parry {
 		this.topic = fset;
 	}
 
+	/** True if the input contains a delusion-triggering noun/verb (MAFIA,
+	 * GUN, KILL, SPY, ...), or - only once mistrust has built up past 10 -
+	 * one of the deliberately ambiguous trigger words (BEAT, HATE) that are
+	 * innocuous early in a conversation but paranoia-inducing once PARRY is
+	 * already suspicious. Used by response() to decide whether to force
+	 * PARRY into full delusional mode. */
 	private delCheck(inp: string[]): boolean {
 		if (this.memberAny(this.delNouns, inp)) return true;
 		if (this.memberAny(this.delVerbs, inp)) return true;
@@ -411,14 +546,29 @@ export class Parry {
 		return false;
 	}
 
+	/** Looks up a canned response by its pdat number, or null if that
+	 * number isn't in the (mostly-lost) original response database. */
 	private express(num: number): string | null {
 		return this.pdat.get(num) ?? null;
 	}
 
+	/** Same as express(), but falls back to a hand-written synthetic()
+	 * response when the original pdat entry is missing - which, per the
+	 * README, is true for most entries since only skeleton pdat data
+	 * survived. */
 	private expressOrSynth(num: number): string {
 		return this.pdat.get(num) ?? this.synthetic(num);
 	}
 
+	/**
+	 * Hand-written replacement text for response numbers whose original
+	 * pdat entry was lost (see the class-level `pdat` field comment and the
+	 * README's History section). These are NOT recovered originals - they
+	 * are this port's own best-guess paraphrase of what a paranoid patient
+	 * might plausibly say for that response slot, picked at random from a
+	 * few alternatives (via randomIdx) to avoid always repeating the exact
+	 * same line for the same trigger.
+	 */
 	private synthetic(n: number): string {
 		const r: Record<number, string[]> = {
 			0: ["I DON'T KNOW WHAT YOU MEAN.", "WHAT?", "I DON'T FOLLOW."],
@@ -501,6 +651,38 @@ export class Parry {
 		return idx;
 	}
 
+	/**
+	 * Produces PARRY's reply to one line of input. Order of operations:
+	 *
+	 *   1. Tokenise + canonicalise the input (canonicalTokenize).
+	 *   2. Run the per-turn upkeep: emotion decay (modifyVariables), the
+	 *      inference engine (applyInferences), then apply whatever
+	 *      emotional jumps it scheduled (applyEmotionalJumps). This happens
+	 *      BEFORE looking at what to say, so the emotional state driving
+	 *      word choice below already reflects this turn's input.
+	 *   3. Try a direct pattern match first (matchPatterns against the
+	 *      simple then compound pattern tables) - the closest thing to
+	 *      "understanding" the specific sentence.
+	 *   4. If nothing matched, fall through a fixed priority list of
+	 *      special cases, each one a documented behaviour of the original
+	 *      system:
+	 *        - SPECFN: "go on"/"continue" or "elaborate" requests get fixed
+	 *          canned responses (16, 24).
+	 *        - FLARE: if this input pushes the delusion topic forward (see
+	 *          checkFlare), respond from that flare's own response set.
+	 *        - DELREF: certain delusion-trigger words (see delCheck) push
+	 *          PARRY fully into delusional mode (delFlag) with a fear jump.
+	 *        - MISCQ: generic "why"/"how" questions get a stock reply.
+	 *        - MISCS: greetings get a stock reply.
+	 *        - keyword fallback: a small table of common words (I, YOU,
+	 *          DOCTOR, ...) each with a few alternative responses, cycled
+	 *          via pick() so the same keyword doesn't always get the exact
+	 *          same reply twice in a row.
+	 *   5. If truly nothing matched anything, a last-resort generic reply.
+	 *
+	 * Every returned string passes through finalizeResponse(), which can
+	 * still adjust flare state based on words PARRY itself just said.
+	 */
 	response(input: string): string {
 		const tokens = this.canonicalTokenize(input);
 

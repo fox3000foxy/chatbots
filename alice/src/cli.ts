@@ -1,8 +1,8 @@
 import * as readline from "node:readline";
 import { Alice } from "./alice";
 
-import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const AIML_DIR = resolve(__dirname, "../aiml");
 
@@ -16,7 +16,7 @@ function main() {
 	}
 
 	console.log(`\n${"=".repeat(60)}`);
-	console.log("  A.L.I.C.E. (1995) — Free ALICE AIML v1.6");
+	console.log("  A.L.I.C.E. (1995) -- Free ALICE AIML v1.6");
 	console.log("  Based on Dr. Richard Wallace's AIML files");
 	console.log(`${"=".repeat(60)}\n`);
 	console.log("ALICE: Hello. I am ALICE.\n");

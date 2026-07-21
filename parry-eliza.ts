@@ -19,7 +19,7 @@ function main() {
 
 	console.log("=".repeat(68));
 	console.log("   ELIZA (1966) meets PARRY (1972)");
-	console.log("   RFC 439 — 18 September 1972");
+	console.log("   RFC 439 -- 18 September 1972");
 	console.log("=".repeat(68));
 	console.log();
 
@@ -44,7 +44,7 @@ function main() {
 		console.log(`[PARRY] ${parryResponse}`);
 
 		if (repeatCount >= 4) {
-			console.log("(conversation stalled — PARRY is looping)");
+			console.log("(conversation stalled -- PARRY is looping)");
 			break;
 		}
 

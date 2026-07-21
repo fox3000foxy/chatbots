@@ -1,9 +1,9 @@
+import { dirname, join } from "node:path";
 import { createInterface } from "node:readline";
-import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { TranscriptStore } from "./store.js";
 import { findCandidates, pickReply } from "./matcher.js";
 import { SEED_CONVERSATIONS } from "./seed.js";
+import { TranscriptStore } from "./store.js";
 import type { BotConfig } from "./types.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -53,7 +53,7 @@ async function main() {
 
 	const rl = createInterface({ input: process.stdin, output: process.stdout });
 
-	console.log("\nCleverbot — starting conversation (type /quit to exit).");
+	console.log("\nCleverbot -- starting conversation (type /quit to exit).");
 	console.log("Note: anything new you teach it only becomes matchable after you restart\n(that's the documented 'no learning mid-conversation' behaviour).\n");
 
 	const ask = (): Promise<string> => new Promise((resolve) => rl.question("You:  ", resolve));

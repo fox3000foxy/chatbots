@@ -1,4 +1,4 @@
-# Chatbots — ELIZA, PARRY, ALICE, and Jabberwacky
+# Chatbots -- ELIZA, PARRY, ALICE, and Jabberwacky
 
 Four landmark conversational agents from the history of artificial intelligence, faithfully ported to TypeScript. Each preserves the original data files, control flow, and architectural design of the source system.
 
@@ -13,17 +13,17 @@ bun run cleverbot # Interactive conversation with Cleverbot (1997–)
 bun run meeting  # Automated ELIZA ↔ PARRY conversation (RFC 439)
 ```
 
-Type `goodbye` to exit any interactive session (Jabberwacky and Cleverbot: `/quit`). Use `--script <path>` with ELIZA to load custom `.ela` scripts. Run `bun run biome check .` to lint — 0 errors expected.
+Type `goodbye` to exit any interactive session (Jabberwacky and Cleverbot: `/quit`). Use `--script <path>` with ELIZA to load custom `.ela` scripts. Run `bun run biome check .` to lint -- 0 errors expected.
 
 ---
 
-## ELIZA (1966) — Joseph Weizenbaum, MIT
+## ELIZA (1966) -- Joseph Weizenbaum, MIT
 
 ELIZA, created at MIT in 1964–1966 by Joseph Weizenbaum, is widely regarded as the first chatbot. The DOCTOR script simulates a Rogerian psychotherapist using pattern matching and decomposition/reassembly rules.
 
 ### History
 
-The original was written in **MAD-SLIP** (not Lisp — a common misconception). MAD-SLIP combined the MAD language with SLIP list-processing primitives on the IBM 7094. The source was believed lost until **Jeff Shrager rediscovered it in Weizenbaum's MIT archives in 2021**. This TypeScript port is based on [anthay/ELIZA](https://github.com/anthay/ELIZA), a faithful C++ reimplementation using the rediscovered script files.
+The original was written in **MAD-SLIP** (not Lisp -- a common misconception). MAD-SLIP combined the MAD language with SLIP list-processing primitives on the IBM 7094. The source was believed lost until **Jeff Shrager rediscovered it in Weizenbaum's MIT archives in 2021**. This TypeScript port is based on [anthay/ELIZA](https://github.com/anthay/ELIZA), a faithful C++ reimplementation using the rediscovered script files.
 
 ### Script Format
 
@@ -42,7 +42,7 @@ Each rule specifies a **keyword**, optional **synonym** (`=`), **precedence** (p
 | File | Description |
 |------|-------------|
 | `ELIZA-script-DOCTOR-original-1966-CACM-appendix.txt` | Weizenbaum's original DOCTOR as published in CACM |
-| `ELIZA-script-YAPYAP-original.txt` | YAPYAP — Weizenbaum's personal scripting extension with numeric labels, PRE rules, and DO side effects |
+| `ELIZA-script-YAPYAP-original.txt` | YAPYAP -- Weizenbaum's personal scripting extension with numeric labels, PRE rules, and DO side effects |
 | `ELIZA-script-YAPYAP-modified-for-1966-CACM-ELIZA.txt` | YAPYAP adapted to the CACM vocabulary set |
 | `ELIZA-script-DOCTOR-French-Jeu-de-Paume.txt` | French translation of DOCTOR by the Jeu de Paume team |
 | `default.txt` | A compact standalone script built into the CLI binary |
@@ -82,7 +82,7 @@ flowchart TD
 
 ### State
 
-ELIZA has **no persistent internal state** — no emotional model, no knowledge base, no context beyond a single memory rule that recalls previously matched user statements containing "YOUR" and a round-robin index per decomposition rule for response cycling.
+ELIZA has **no persistent internal state** -- no emotional model, no knowledge base, no context beyond a single memory rule that recalls previously matched user statements containing "YOUR" and a round-robin index per decomposition rule for response cycling.
 
 ### Response Generation Details
 
@@ -93,13 +93,13 @@ ELIZA has **no persistent internal state** — no emotional model, no knowledge 
 5. **Decomposition matching**: The matched keyword's decomposition patterns are tried in order. Patterns use `0` (wildcard for any number of words) and positive integers N (capture exactly N words). Parenthesised DLIST references (like `(/BELIEF)`) match against tag lists.
 6. **Reassembly cycling**: Each decomposition has an ordered list of reassembly rules, cycled sequentially via a modulo counter.
 7. **Reference expansion**: `1`, `2`, `3`... in a reassembly rule are replaced by the corresponding captured component from the decomposition match. `0` is replaced by "HMMM".
-8. **PRE rules**: A special reassembly format `(PRE (rephrase) (=KEYWORD))` that transforms the captured words into a new sentence and re-injects it into the keyword scanning loop — ELIZA's mechanism for pronoun transformation (e.g., `I'M` → `YOU ARE`, `YOU'RE` → `I AM`).
+8. **PRE rules**: A special reassembly format `(PRE (rephrase) (=KEYWORD))` that transforms the captured words into a new sentence and re-injects it into the keyword scanning loop -- ELIZA's mechanism for pronoun transformation (e.g., `I'M` → `YOU ARE`, `YOU'RE` → `I AM`).
 9. **NEWKEY**: A reassembly of just `NEWKEY` tells ELIZA to skip to the next keyword on the stack, effectively discarding the current match.
 10. **NONE fallback**: If no keyword transformation succeeds and no keyword is on the stack, the special `zNONE` rule produces generic evasive responses.
 
 ---
 
-## PARRY (1972) — Kenneth Colby, Stanford
+## PARRY (1972) -- Kenneth Colby, Stanford
 
 PARRY simulates a patient with **paranoid schizophrenia**. Created by psychiatrist Kenneth Colby at Stanford, it was the first chatbot with an **emotional model** and **belief network**, making it a landmark in computational psychiatry and affective computing.
 
@@ -121,9 +121,9 @@ Written in **MLISP** on the **PDP-10** running the **WAITS** operating system, t
 | `startr.alf` / `stoppr.alf` | Sentence start / stop words |
 | `spats.sel` | Simple response patterns (single clause) |
 | `cpats.sel` | Compound response patterns (multi-clause) |
-| `bel` | Belief network — 200+ beliefs with category, strength, and negation |
-| `inf` | Inference rules — TH2 (decay), EMOTE (emotional jumps), IF (conditional) |
-| `pdatb` | Response database (skeleton only — responses synthesised) |
+| `bel` | Belief network -- 200+ beliefs with category, strength, and negation |
+| `inf` | Inference rules -- TH2 (decay), EMOTE (emotional jumps), IF (conditional) |
+| `pdatb` | Response database (skeleton only -- responses synthesised) |
 | `pmem*` | Memory/frame system for dialogue context |
 | `opar3` / `opar3.lap` | Output paragraph assembly |
 | `front.lap` | I/O handling (PDP-10 assembly) |
@@ -238,9 +238,9 @@ PARRY resolves cross-sentence references through its belief and memory system. T
 
 ---
 
-## ALICE (1995) — Dr. Richard Wallace
+## ALICE (1995) -- Dr. Richard Wallace
 
-A.L.I.C.E. (Artificial Linguistic Internet Computer Entity) is a pure, pattern-matching question-answering system powered by **AIML** (Artificial Intelligence Markup Language). Unlike ELIZA and PARRY, ALICE has **no emotional model** — it is entirely knowledge-based.
+A.L.I.C.E. (Artificial Linguistic Internet Computer Entity) is a pure, pattern-matching question-answering system powered by **AIML** (Artificial Intelligence Markup Language). Unlike ELIZA and PARRY, ALICE has **no emotional model** -- it is entirely knowledge-based.
 
 ### History
 
@@ -316,7 +316,7 @@ flowchart TD
 |-----|----------|
 | `<pattern>` | Input pattern with `*` and `_` wildcards (any character sequence) |
 | `<template>` | Output template containing text and tags |
-| `<srai>` | Symbolic Reduction — recursively match an internally generated pattern against the category list |
+| `<srai>` | Symbolic Reduction -- recursively match an internally generated pattern against the category list |
 | `<sr>` | Shorthand for `<srai><star/></srai>` |
 | `<star/> | Insert the wildcard-matched text from the input |
 | `<random>` | Select one of its `<li>` children at random |
@@ -342,20 +342,20 @@ Input: "WHAT'S UP?"
 
 ---
 
-## Jabberwacky (≈2000s) — Rollo Carpenter
+## Jabberwacky (≈2000s) -- Rollo Carpenter
 
 Jabberwacky is a **transcript-based chatbot** with no rules, no patterns, and no knowledge base. Instead of hand-authored scripts (ELIZA/PARRY) or curated XML categories (ALICE), it learns entirely from conversation transcripts: every line ever said is stored in a chronological log, and new input is answered by finding a similar moment in history and reusing whatever was said next on that earlier occasion.
 
 ### Architecture
 
-The transcript is a flat, ever-growing JSON file. Each line records the speaker (`"human"` or `"bot"`), the text, a `respondsTo` pointer linking it to the line it replied to, and a session ID. There is no separate rule base — the transcript *is* the bot's brain.
+The transcript is a flat, ever-growing JSON file. Each line records the speaker (`"human"` or `"bot"`), the text, a `respondsTo` pointer linking it to the line it replied to, and a session ID. There is no separate rule base -- the transcript *is* the bot's brain.
 
 When the user speaks, the engine:
 
 1. **Scores every past line** by relevance to the new input using a string similarity function.
 2. **Adjusts scores** by context fit: how well the recent conversation history matches what historically preceded each candidate line.
 3. **Adds a recency bonus**: newer conversations score slightly higher, so the bot's personality can drift as it learns.
-4. **Picks probabilistically** from the top K candidates, weighted by score — the same line isn't always chosen, producing natural variation.
+4. **Picks probabilistically** from the top K candidates, weighted by score -- the same line isn't always chosen, producing natural variation.
 
 ```mermaid
 flowchart TD
@@ -380,31 +380,31 @@ The initial `data/transcript.json` contains a small set of seed conversations. A
 |--------|-------------|----------------------|
 | Knowledge | Learned from conversation | Hand-authored (scripts, patterns, AIML) |
 | State | Flat transcript, no structure | Rule tables, belief networks, XML categories |
-| Learning | Appends every exchange to memory | Static — no runtime learning |
+| Learning | Appends every exchange to memory | Static -- no runtime learning |
 | Coherence | Improves with more data | Fixed from the start |
 | Personality | Drifts with new conversations | Fixed by script content |
 
 ---
 
-## Cleverbot (1997– ) — Rollo Carpenter, Existor
+## Cleverbot (1997– ) -- Rollo Carpenter, Existor
 
-Cleverbot is Jabberwacky's commercial successor and shares the same core idea: no rules, no patterns, no knowledge base, just a transcript of past conversation reused to answer new input. Neither the original Jabberwacky nor Cleverbot source code has ever been published — Existor kept both proprietary — and this environment was unable to retrieve any real transcript logs to reconstruct from (Wayback Machine and Loebner Prize archive fetches were blocked). This port is therefore a **clean-room reimplementation** built only from publicly documented descriptions of how the system behaves, not a copy of anything proprietary and not trained on real Cleverbot logs.
+Cleverbot is Jabberwacky's commercial successor and shares the same core idea: no rules, no patterns, no knowledge base, just a transcript of past conversation reused to answer new input. Neither the original Jabberwacky nor Cleverbot source code has ever been published -- Existor kept both proprietary -- and this environment was unable to retrieve any real transcript logs to reconstruct from (Wayback Machine and Loebner Prize archive fetches were blocked). This port is therefore a **clean-room reimplementation** built only from publicly documented descriptions of how the system behaves, not a copy of anything proprietary and not trained on real Cleverbot logs.
 
 ### What's Documented, and What Isn't
 
 Two behavioural details about Cleverbot are widely reported and are what this port tries to capture, beyond what the Jabberwacky port already models:
 
 1. **It learns from many different people at once.** Millions of separate users each contributed lines to the same shared transcript, so a reply drawn from history can come from a totally different "voice" than whatever character the current conversation seems to have. This is the commonly cited explanation for why Cleverbot appears to contradict itself or shift personality mid-conversation.
-2. **It does not learn within a single conversation.** What you say to it is recorded, but isn't available for it to match against until a later, periodic reprocessing of the database — often described as an overnight retrain. You cannot teach it a fact and quiz it on that fact in the same session.
+2. **It does not learn within a single conversation.** What you say to it is recorded, but isn't available for it to match against until a later, periodic reprocessing of the database -- often described as an overnight retrain. You cannot teach it a fact and quiz it on that fact in the same session.
 
-Everything below that — the exact scoring formula, how candidates are ranked, how "context" is weighted — was never made public. The implementation choices here are original engineering decisions made to satisfy the two documented behaviours above, not a reproduction of Existor's internals.
+Everything below that -- the exact scoring formula, how candidates are ranked, how "context" is weighted -- was never made public. The implementation choices here are original engineering decisions made to satisfy the two documented behaviours above, not a reproduction of Existor's internals.
 
 ### Architecture
 
 Built directly on top of the Jabberwacky port's transcript-store design, with two additions:
 
-- **`contributorId` on every line** — seed data is split across several distinct fictional "personas" (deadpan, earnest, philosopher, jokester, contrarian, confused, flirty) instead of one continuous voice, so retrieval can pull a reply from a different persona than the one the conversation seems to be having with you.
-- **A `consolidated` flag on every line** — new lines start `false` (pending) and are invisible to the matcher. Calling `consolidate()` — run automatically at the *start* of each CLI session, never during one — flips every pending line to `true`. This is what prevents same-session learning while still letting the bot grow smarter across separate runs.
+- **`contributorId` on every line** -- seed data is split across several distinct fictional "personas" (deadpan, earnest, philosopher, jokester, contrarian, confused, flirty) instead of one continuous voice, so retrieval can pull a reply from a different persona than the one the conversation seems to be having with you.
+- **A `consolidated` flag on every line** -- new lines start `false` (pending) and are invisible to the matcher. Calling `consolidate()` -- run automatically at the *start* of each CLI session, never during one -- flips every pending line to `true`. This is what prevents same-session learning while still letting the bot grow smarter across separate runs.
 
 ```mermaid
 flowchart TD
@@ -419,7 +419,7 @@ flowchart TD
 
 ### Why the Weights Differ From Jabberwacky
 
-The Jabberwacky port weighs context fit at 0.25; this port weighs it at 0.4. That reflects Cleverbot's reputation for drawing on more of the preceding exchange rather than reacting to the last line in isolation — it can seem to track a couple of turns back mid-conversation even though (per the point above) it never actually learns anything new in that same conversation.
+The Jabberwacky port weighs context fit at 0.25; this port weighs it at 0.4. That reflects Cleverbot's reputation for drawing on more of the preceding exchange rather than reacting to the last line in isolation -- it can seem to track a couple of turns back mid-conversation even though (per the point above) it never actually learns anything new in that same conversation.
 
 ### Seed Data
 
@@ -457,7 +457,7 @@ This runs a 25-turn automated conversation seeded with a randomly selected topic
 | "TELL ME ABOUT YOURSELF." | Neutral opener |
 | "WHAT ARE YOU MOST AFRAID OF?" | Emotion probe |
 
-The conversation is **non-deterministic**: different random seeds produce different exchanges. PARRY's response cycling (`pick()` and `randomIdx()`) and ELIZA's round-robin reassembly selection combine to create varied output. If PARRY repeats the same response 4+ times, the conversation terminates early with a "(conversation stalled — PARRY is looping)" message.
+The conversation is **non-deterministic**: different random seeds produce different exchanges. PARRY's response cycling (`pick()` and `randomIdx()`) and ELIZA's round-robin reassembly selection combine to create varied output. If PARRY repeats the same response 4+ times, the conversation terminates early with a "(conversation stalled -- PARRY is looping)" message.
 
 ### Architecture
 
@@ -506,10 +506,10 @@ chatbots/
 
 ### Dependencies
 
-- **typescript** — Type checking and compilation
-- **tsx** — TypeScript execution for Node.js
-- **dom-js** — XML parser for AIML (ALICE only)
-- **biome** — Linting and formatting (dev)
+- **typescript** -- Type checking and compilation
+- **tsx** -- TypeScript execution for Node.js
+- **dom-js** -- XML parser for AIML (ALICE only)
+- **biome** -- Linting and formatting (dev)
 
 ### Running Biome
 
@@ -521,4 +521,4 @@ All bots pass with 0 errors.
 
 ### Licensing
 
-ELIZA, PARRY, and ALICE originals: public domain / historical research artifacts. Jabberwacky and Cleverbot: unlike the other three, their original source was **never published** and remains Existor/Rollo Carpenter's proprietary property — the ports in this repo are clean-room reimplementations of the publicly documented *behaviour* only, containing no proprietary code or data. All ports here: provided for educational use.
+ELIZA, PARRY, and ALICE originals: public domain / historical research artifacts. Jabberwacky and Cleverbot: unlike the other three, their original source was **never published** and remains Existor/Rollo Carpenter's proprietary property -- the ports in this repo are clean-room reimplementations of the publicly documented *behaviour* only, containing no proprietary code or data. All ports here: provided for educational use.
