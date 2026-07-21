@@ -6,6 +6,7 @@
     "parry": "tsx parry/src/cli.ts",
     "alice": "tsx alice/src/cli.ts",
     "jabber": "node jabberwacky/dist/index.js",
+    "cleverbot": "node cleverbot/dist/index.js",
     "meeting": "tsx parry-eliza.ts"
   },
   "dependencies": {

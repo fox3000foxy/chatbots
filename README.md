@@ -9,10 +9,11 @@ bun run eliza    # Interactive conversation with ELIZA/DOCTOR (1966)
 bun run parry    # Interactive conversation with PARRY (1972)
 bun run alice    # Interactive conversation with ALICE (1995)
 bun run jabber   # Interactive conversation with Jabberwacky (2000s)
+bun run cleverbot # Interactive conversation with Cleverbot (1997–)
 bun run meeting  # Automated ELIZA ↔ PARRY conversation (RFC 439)
 ```
 
-Type `goodbye` to exit any interactive session (Jabberwacky: `/quit`). Use `--script <path>` with ELIZA to load custom `.ela` scripts. Run `bun run biome check .` to lint — 0 errors expected.
+Type `goodbye` to exit any interactive session (Jabberwacky and Cleverbot: `/quit`). Use `--script <path>` with ELIZA to load custom `.ela` scripts. Run `bun run biome check .` to lint — 0 errors expected.
 
 ---
 
@@ -385,6 +386,56 @@ The initial `data/transcript.json` contains a small set of seed conversations. A
 
 ---
 
+## Cleverbot (1997– ) — Rollo Carpenter, Existor
+
+Cleverbot is Jabberwacky's commercial successor and shares the same core idea: no rules, no patterns, no knowledge base, just a transcript of past conversation reused to answer new input. Neither the original Jabberwacky nor Cleverbot source code has ever been published — Existor kept both proprietary — and this environment was unable to retrieve any real transcript logs to reconstruct from (Wayback Machine and Loebner Prize archive fetches were blocked). This port is therefore a **clean-room reimplementation** built only from publicly documented descriptions of how the system behaves, not a copy of anything proprietary and not trained on real Cleverbot logs.
+
+### What's Documented, and What Isn't
+
+Two behavioural details about Cleverbot are widely reported and are what this port tries to capture, beyond what the Jabberwacky port already models:
+
+1. **It learns from many different people at once.** Millions of separate users each contributed lines to the same shared transcript, so a reply drawn from history can come from a totally different "voice" than whatever character the current conversation seems to have. This is the commonly cited explanation for why Cleverbot appears to contradict itself or shift personality mid-conversation.
+2. **It does not learn within a single conversation.** What you say to it is recorded, but isn't available for it to match against until a later, periodic reprocessing of the database — often described as an overnight retrain. You cannot teach it a fact and quiz it on that fact in the same session.
+
+Everything below that — the exact scoring formula, how candidates are ranked, how "context" is weighted — was never made public. The implementation choices here are original engineering decisions made to satisfy the two documented behaviours above, not a reproduction of Existor's internals.
+
+### Architecture
+
+Built directly on top of the Jabberwacky port's transcript-store design, with two additions:
+
+- **`contributorId` on every line** — seed data is split across several distinct fictional "personas" (deadpan, earnest, philosopher, jokester, contrarian, confused, flirty) instead of one continuous voice, so retrieval can pull a reply from a different persona than the one the conversation seems to be having with you.
+- **A `consolidated` flag on every line** — new lines start `false` (pending) and are invisible to the matcher. Calling `consolidate()` — run automatically at the *start* of each CLI session, never during one — flips every pending line to `true`. This is what prevents same-session learning while still letting the bot grow smarter across separate runs.
+
+```mermaid
+flowchart TD
+    A["User input"] --> B["Append as PENDING<br>(not yet matchable)"]
+    B --> C["Search CONSOLIDATED pool only<br>score = 0.5 relevance + 0.4 context + 0.1 recency"]
+    C --> D["Weighted random pick from top K"]
+    D --> E["Reply (from any persona)"]
+    E --> F["Session ends, lines stay PENDING"]
+    F --> G["Next run starts:<br>consolidate() flips pending → matchable"]
+    G --> A
+```
+
+### Why the Weights Differ From Jabberwacky
+
+The Jabberwacky port weighs context fit at 0.25; this port weighs it at 0.4. That reflects Cleverbot's reputation for drawing on more of the preceding exchange rather than reacting to the last line in isolation — it can seem to track a couple of turns back mid-conversation even though (per the point above) it never actually learns anything new in that same conversation.
+
+### Seed Data
+
+`data/transcript.json` is bootstrapped from `src/seed.ts`, ~40 short original exchanges hand-written for this project across the seven personas listed above, all pre-marked `consolidated: true` since they represent knowledge the bot would already have when you first talk to it.
+
+### Try It
+
+```bash
+bun run cleverbot
+# ...have a conversation, teach it something new, then /quit...
+bun run cleverbot
+# notice the startup line: "Overnight retrain: N line(s) ... now part of what I can draw on."
+```
+
+---
+
 ## ELIZA vs PARRY (RFC 439)
 
 The first conversation between two AI programs occurred on **September 18, 1972** over the **ARPANET**. ELIZA (running Weizenbaum's DOCTOR script at BBN) conversed with PARRY (running at Stanford) via teletype, mediated by human operators who typed each bot's output to the other.
@@ -443,6 +494,10 @@ chatbots/
 │   ├── src/                # Engine: transcript store, similarity matcher
 │   ├── dist/               # Compiled JS
 │   └── data/               # Seed conversations (grows with use)
+├── cleverbot/
+│   ├── src/                # Engine: pending/consolidated store, multi-persona matcher
+│   ├── dist/               # Compiled JS
+│   └── data/               # Seed conversations across 7 personas (grows with use)
 ├── parry-eliza.ts           # RFC 439 meeting simulation
 ├── package.json             # Scripts: eliza, parry, alice, jabber, meeting
 ├── tsconfig.json
@@ -462,8 +517,8 @@ chatbots/
 bun run biome check .
 ```
 
-All three bots pass with 0 errors.
+All bots pass with 0 errors.
 
 ### Licensing
 
-Original: Public domain (historical research). Port: provided for educational use.
+ELIZA, PARRY, and ALICE originals: public domain / historical research artifacts. Jabberwacky and Cleverbot: unlike the other three, their original source was **never published** and remains Existor/Rollo Carpenter's proprietary property — the ports in this repo are clean-room reimplementations of the publicly documented *behaviour* only, containing no proprietary code or data. All ports here: provided for educational use.
